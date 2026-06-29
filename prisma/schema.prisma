@@ -1,0 +1,431 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. ENUMS
+// ==========================================
+
+enum Role {
+  ADMIN
+  ORGANIZER
+  VENDOR
+  USER
+}
+
+enum AccountStatus {
+  PENDING
+  APPROVED
+  BLOCKED
+}
+
+enum PaymentStatus {
+  PENDING
+  HELD_IN_ESCROW
+  PROCESSING_PAYOUT
+  COMPLETED
+  DISPUTED
+  FAILED
+  REFUNDED
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COMPLETED
+}
+
+enum PaymentGateway {
+  KHALTI
+  ESEWA
+}
+
+enum PaymentType {
+  TICKET_PURCHASE
+  VENDOR_DEPOSIT
+  VENDOR_REMAINING
+}
+
+enum VendorPaymentStatus {
+  PENDING
+  DEPOSIT_PAID
+  FULLY_PAID
+  COMPLETED
+  REFUNDED
+  DISPUTED
+  PROCESSING_PAYOUT
+}
+
+// ==========================================
+// 2. CORE USER MANAGEMENT
+// ==========================================
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(USER)
+  status       AccountStatus @default(APPROVED)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  emailVerified    DateTime?
+  verificationToken String?   @unique
+  verificationTokenExpires DateTime?
+  resetPasswordToken     String?
+  resetPasswordExpires   DateTime?
+
+  // Relationships
+  organizedEvents  TicketedEvent[]   @relation("OrganizerToEvents")
+  organizerProfile OrganizerProfile?
+  vendorProfile    VendorProfile?
+  socialEvents     UserSocialEvent[]
+  ticketBookings   TicketBooking[]
+  vendorBookings   VendorBooking[]
+  processedPayouts Payout[] @relation("AdminPayouts")
+}
+
+// ==========================================
+// 3. TICKETED EVENTS MODULE
+// ==========================================
+
+model OrganizerProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  businessName String
+  businessType String
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TicketedEvent {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  imageUrl      String?
+  galleryImages String[]
+  eventDate     DateTime
+  eventTime     String
+  location      String
+  capacity      Int
+  organizerId   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  isActive      Boolean  @default(true)
+  
+  // ✅ ADD THESE TWO LINES
+  isCompleted   Boolean  @default(false)
+  completedAt   DateTime?
+
+  organizer   User            @relation("OrganizerToEvents", fields: [organizerId], references: [id], onDelete: Cascade)
+  ticketTiers TicketTier[]
+  bookings    TicketBooking[]
+}
+
+model TicketTier {
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  price     Decimal  @db.Decimal(10, 2)
+  quantity  Int
+  soldCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event          TicketedEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketBookings TicketBooking[]
+}
+
+model TicketBooking {
+  id            String        @id @default(cuid())
+  ticketNumber  String
+  userId        String
+  eventId       String
+  tierId        String
+  quantity      Int           @default(1)
+  totalAmount   Decimal       @db.Decimal(10, 2)
+  paymentStatus PaymentStatus @default(PENDING)
+  gateway       String
+  transactionId String?       @unique
+  qrCodeHash    String?       @unique
+  checkedIn     Boolean       @default(false)
+  checkedInAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  paymentIntentId String?      // Link to PaymentTransaction
+  escrowReleased  Boolean      @default(false)
+  amountReleasedAt DateTime?
+
+  // ✅ ADD THIS RELATION
+  payouts Payout[]
+
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event               TicketedEvent        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tier                TicketTier           @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  paymentTransactions PaymentTransaction[]
+  refunds             Refund[]
+}
+
+// ==========================================
+// 4. SOCIAL EVENTS & VENDOR MODULE (UPDATED)
+// ==========================================
+
+model VendorProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  businessName  String
+  serviceType   String // catering, venue, photography, etc.
+  location      String
+  description   String?
+  imageUrl      String?
+  galleryImages String[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  servicePackages ServicePackage[]
+  vendorBookings  VendorBooking[]
+  payouts        Payout[]
+  unavailableDates VendorUnavailableDate[]
+}
+
+model ServicePackage {
+  id            String   @id @default(cuid())
+  vendorId      String
+  name          String
+  price         Decimal  @db.Decimal(10, 2)
+  description   String
+  imageUrl      String?
+  galleryImages String[]
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // ========== NEW FIELDS ==========
+  pricingType    String @default("fixed") // "fixed" or "per_person"
+  minGuests      Int? // Minimum guests required
+  maxGuests      Int? // Maximum guests capable
+  serviceDetails Json? // Flexible JSON for service-specific data
+  status         String @default("draft") // "draft", "active", "inactive"
+  // ========== END NEW FIELDS ==========
+
+  vendor         VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  packageAddOns  PackageAddOn[]
+  vendorBookings VendorBooking[]
+}
+
+model PackageAddOn {
+  id         String   @id @default(cuid())
+  packageId  String
+  name       String
+  extraPrice Decimal  @db.Decimal(10, 2)
+  isOptional Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // ========== NEW FIELD ==========
+  pricingType String @default("fixed") // "fixed" or "per_person"
+  // ========== END NEW FIELD ==========
+
+  servicePackage ServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  bookingAddOns  BookingAddOn[]
+}
+
+model UserSocialEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  eventDate  DateTime
+  guestCount Int
+  status     String   @default("PLANNING")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendorBookings VendorBooking[]
+}
+
+model VendorBooking {
+  id                String              @id @default(cuid())
+  userSocialEventId String
+  userId            String
+  vendorId          String
+  packageId         String
+  totalAmount       Decimal             @db.Decimal(10, 2)
+  bookingStatus     BookingStatus       @default(PENDING)
+  paymentStatus     PaymentStatus @default(PENDING)
+  gateway           String
+  transactionId     String?             @unique
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  startDate         DateTime           // When event starts
+  endDate           DateTime            // When event ends
+  totalDays         Int                 // Calculated: endDate - startDate + 1
+  dailyRate         Decimal             @db.Decimal(10, 2) // Price per day
+  bookingReference  String              @unique // For idempotency
+
+  userSocialEvent UserSocialEvent @relation(fields: [userSocialEventId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor          VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  servicePackage  ServicePackage  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  bookingAddOns   BookingAddOn[]
+  disputes        Dispute[]
+
+  depositAmount         Decimal?  @db.Decimal(10, 2)
+  remainingAmount      Decimal?  @db.Decimal(10, 2)
+  depositTxId          String?
+  remainingTxId        String?
+  depositPaidAt        DateTime?
+  remainingPaidAt      DateTime?
+  amountReleasedAt     DateTime?
+  customerConfirmed    Boolean   @default(false)
+  vendorMarkedComplete Boolean   @default(false)
+  refundEligible       Boolean   @default(true)
+
+  // ✅ NEW FIELDS FOR CANCELLATION TRACKING
+  cancelledBy         String?   // "CUSTOMER" or "VENDOR" or "ADMIN"
+  cancellationReason  String?
+  cancelledAt         DateTime?
+
+  // Relations
+  paymentTransactions PaymentTransaction[]
+  refunds             Refund[]
+  vendorPaymentStatus VendorPaymentStatus @default(PENDING)
+  payouts            Payout[]
+}
+
+model BookingAddOn {
+  id              String  @id @default(cuid())
+  vendorBookingId String
+  addOnId         String
+  priceAtBooking  Decimal @db.Decimal(10, 2)
+
+  vendorBooking VendorBooking @relation(fields: [vendorBookingId], references: [id], onDelete: Cascade)
+  packageAddOn  PackageAddOn  @relation(fields: [addOnId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 5. PLATFORM ADMINISTRATION & DISPUTES
+// ==========================================
+
+model Dispute {
+  id            String   @id @default(cuid())
+  bookingId     String
+  userId        String
+  vendorId      String
+  reason        String
+  status        String   @default("OPEN")
+  adminDecision String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  vendorBooking VendorBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model PaymentTransaction {
+  id                   String  @id @default(cuid())
+  transactionId        String  @unique
+  gatewayTransactionId String? @unique
+
+  amount        Decimal @db.Decimal(10, 2)
+  amountInPaisa Int
+  khaltiFee     Decimal @db.Decimal(10, 2) @default(0)
+
+  gateway     PaymentGateway
+  paymentType PaymentType
+
+  ticketBookingId String?
+  vendorBookingId String?
+
+  status          String @default("PENDING")
+  gatewayResponse Json?
+
+  pidx        String?
+  productCode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ticketBooking TicketBooking? @relation(fields: [ticketBookingId], references: [id])
+  vendorBooking VendorBooking? @relation(fields: [vendorBookingId], references: [id])
+  refunds       Refund[]
+}
+
+model Refund {
+  id                    String  @id @default(cuid())
+  originalTransactionId String
+  refundAmount          Decimal @db.Decimal(10, 2)
+  refundReason          String
+  refundStatus          String  @default("PENDING")
+  gatewayRefundId       String?
+  gatewayResponse       Json?
+
+  ticketBookingId      String?
+  vendorBookingId      String?
+  paymentTransactionId String
+
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  ticketBooking      TicketBooking?     @relation(fields: [ticketBookingId], references: [id])
+  vendorBooking      VendorBooking?     @relation(fields: [vendorBookingId], references: [id])
+  paymentTransaction PaymentTransaction @relation(fields: [paymentTransactionId], references: [id])
+}
+
+// ==========================================
+// 6. PAYOUT & ESCROW MANAGEMENT
+// ==========================================
+
+model Payout {
+  id              String   @id @default(cuid())
+  bookingId       String?   // Optional - for vendor bookings
+  ticketBookingId String?   // Optional - for ticket sales
+  vendorId        String
+  amount          Decimal  @db.Decimal(10, 2)
+  platformCommission Decimal @db.Decimal(10, 2) @default(0)
+  vendorPayout    Decimal  @db.Decimal(10, 2) @default(0)
+  type            String   // "DEPOSIT", "REMAINING", "TICKET_SALES"
+  status          String   @default("PENDING")
+  adminId         String?
+  transactionId   String?  @unique
+  khaltiPayoutId  String?
+  processedAt     DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  vendorBooking VendorBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  ticketBooking TicketBooking? @relation(fields: [ticketBookingId], references: [id], onDelete: SetNull)
+  vendor        VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  admin         User?           @relation("AdminPayouts", fields: [adminId], references: [id])
+
+  @@index([bookingId])
+  @@index([ticketBookingId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+model VendorUnavailableDate {
+  id          String   @id @default(cuid())
+  vendorId    String
+  date        DateTime
+  reason      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  vendor VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, date])
+}

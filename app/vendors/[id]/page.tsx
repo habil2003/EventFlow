@@ -1,0 +1,873 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import {
+  MapPinIcon,
+  StarIcon,
+  CheckCircleIcon,
+  MoonIcon,
+  SunIcon,
+  ArrowLeftIcon,
+  CalendarIcon,
+  UserGroupIcon,
+  CurrencyRupeeIcon,
+  PlusIcon,
+  MinusIcon,
+  ShoppingCartIcon,
+  SparklesIcon,
+  BuildingOfficeIcon,
+  PhotoIcon,
+  XMarkIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  InformationCircleIcon
+} from "@heroicons/react/24/outline";
+
+// AddOn interface with pricingType
+interface AddOn {
+  id: string;
+  name: string;
+  extraPrice: number;
+  isOptional: boolean;
+  pricingType?: string; // "fixed" or "per_person"
+}
+
+// Package interface with new fields
+interface Package {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  imageUrl: string | null;
+  galleryImages: string[];
+  pricingType?: string; // "fixed" or "per_person"
+  minGuests?: number;
+  maxGuests?: number;
+  addOns: AddOn[];
+}
+
+interface Vendor {
+  id: string;
+  businessName: string;
+  serviceType: string;
+  location: string;
+  description: string;
+  imageUrl: string | null;
+  galleryImages: string[];
+  rating?: number;
+  packages: Package[];
+}
+
+export default function VendorDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
+
+  // Get existing event params from URL (when coming from "Add Vendor")
+  const existingEventId = searchParams.get("eventId");
+  const existingEventTitle = searchParams.get("eventTitle");
+  const existingEventDate = searchParams.get("eventDate");
+  const existingGuestCount = searchParams.get("guestCount");
+
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [mounted, setMounted] = useState(false);
+  const [vendor, setVendor] = useState<Vendor | null>(null);
+  const [selectedPackage, setSelectedPackage] = useState<string>("");
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [eventDate, setEventDate] = useState("");
+  const [guestCount, setGuestCount] = useState(100);
+  const [guestCountInput, setGuestCountInput] = useState<string>("100");
+  const [eventTitle, setEventTitle] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [booking, setBooking] = useState(false);
+  const [vendorId, setVendorId] = useState<string | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [selectedPackageImages, setSelectedPackageImages] = useState<string[]>([]);
+  const [packagesLoaded, setPackagesLoaded] = useState(false);
+
+  // Theme management
+  useEffect(() => {
+    setMounted(true);
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle("dark", initialTheme === "dark");
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+  };
+
+  // Get vendor ID from params
+  useEffect(() => {
+    const getId = async () => {
+      const resolvedParams = await params;
+      setVendorId(resolvedParams.id as string);
+    };
+    getId();
+  }, [params]);
+
+  // Pre-fill form with existing event data when coming from "Add Vendor"
+  useEffect(() => {
+    if (existingEventTitle) {
+      setEventTitle(decodeURIComponent(existingEventTitle));
+    }
+    if (existingEventDate) {
+      // Convert to YYYY-MM-DD format for date input
+      let formattedDate = existingEventDate;
+      if (formattedDate.includes('T')) {
+        formattedDate = formattedDate.split('T')[0];
+      }
+      setEventDate(formattedDate);
+    }
+    if (existingGuestCount) {
+      const guestCountNum = parseInt(existingGuestCount);
+      if (!isNaN(guestCountNum) && guestCountNum > 0) {
+        setGuestCount(guestCountNum);
+        setGuestCountInput(guestCountNum.toString());
+      }
+    }
+  }, [existingEventTitle, existingEventDate, existingGuestCount]);
+
+  // Fetch vendor data
+  useEffect(() => {
+    if (!vendorId) return;
+
+    const fetchVendor = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/vendors/${vendorId}`);
+        const data = await response.json();
+        setVendor(data);
+        if (data.packages?.length > 0) {
+          setSelectedPackage(data.packages[0].id);
+          // Set images for the first package
+          const firstPkg = data.packages[0];
+          const images = [];
+          if (firstPkg.imageUrl) images.push(firstPkg.imageUrl);
+          if (firstPkg.galleryImages) images.push(...firstPkg.galleryImages);
+          setSelectedPackageImages(images);
+        }
+        setPackagesLoaded(true);
+      } catch (error) {
+        console.error("Error fetching vendor:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchVendor();
+  }, [vendorId]);
+
+  // Update images when selected package changes
+  useEffect(() => {
+    if (vendor && selectedPackage) {
+      const pkg = vendor.packages.find(p => p.id === selectedPackage);
+      if (pkg) {
+        const images = [];
+        if (pkg.imageUrl) images.push(pkg.imageUrl);
+        if (pkg.galleryImages) images.push(...pkg.galleryImages);
+        setSelectedPackageImages(images);
+        setCurrentImageIndex(0);
+      }
+    }
+  }, [selectedPackage, vendor]);
+
+  // Apply guest count from URL AFTER packages are loaded and validated
+  useEffect(() => {
+    if (packagesLoaded && selectedPackage && existingGuestCount) {
+      const selectedPkg = vendor?.packages.find(p => p.id === selectedPackage);
+      if (selectedPkg) {
+        let guestCountNum = parseInt(existingGuestCount);
+        if (!isNaN(guestCountNum) && guestCountNum > 0) {
+          // Apply min/max constraints based on selected package
+          const minGuests = selectedPkg.minGuests || 1;
+          const maxGuests = selectedPkg.maxGuests || 10000;
+          let validCount = guestCountNum;
+          if (validCount < minGuests) validCount = minGuests;
+          if (validCount > maxGuests) validCount = maxGuests;
+          setGuestCount(validCount);
+          setGuestCountInput(validCount.toString());
+        }
+      }
+    }
+  }, [packagesLoaded, selectedPackage, vendor, existingGuestCount]);
+
+  const handleAddOnToggle = (addOnId: string) => {
+    setSelectedAddOns(prev =>
+      prev.includes(addOnId)
+        ? prev.filter(id => id !== addOnId)
+        : [...prev, addOnId]
+    );
+  };
+
+  // ========== GUEST COUNT HANDLERS WITH PROPER TYPING BEHAVIOR ==========
+
+  // Handle input change - NO validation during typing
+  const handleGuestCountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+
+    // Allow empty string while typing
+    if (rawValue === "") {
+      setGuestCountInput("");
+      return;
+    }
+
+    // Only allow numbers
+    if (/^\d+$/.test(rawValue)) {
+      setGuestCountInput(rawValue);
+    }
+  };
+
+  // Handle blur - apply validation here
+  const handleGuestCountBlur = () => {
+    let numValue = parseInt(guestCountInput);
+
+    // If empty or invalid, set to min
+    if (isNaN(numValue)) {
+      numValue = selectedPkg?.minGuests || 1;
+    }
+
+    // Apply min/max constraints
+    if (selectedPkg) {
+      const minGuests = selectedPkg.minGuests || 1;
+      const maxGuests = selectedPkg.maxGuests || 10000;
+      if (numValue < minGuests) numValue = minGuests;
+      if (numValue > maxGuests) numValue = maxGuests;
+    }
+
+    // Ensure minimum of 1
+    if (numValue < 1) numValue = 1;
+
+    setGuestCount(numValue);
+    setGuestCountInput(numValue.toString());
+  };
+
+  // Increment guest count
+  const incrementGuestCount = () => {
+    const maxGuests = selectedPkg?.maxGuests || 10000;
+    const newValue = Math.min(guestCount + 10, maxGuests);
+    setGuestCount(newValue);
+    setGuestCountInput(newValue.toString());
+  };
+
+  // Decrement guest count
+  const decrementGuestCount = () => {
+    const minGuests = selectedPkg?.minGuests || 1;
+    const newValue = Math.max(guestCount - 10, minGuests);
+    setGuestCount(newValue);
+    setGuestCountInput(newValue.toString());
+  };
+
+  // ========== END GUEST COUNT HANDLERS ==========
+
+  // Calculate totals based on pricing type
+  const selectedPkg = vendor?.packages.find(p => p.id === selectedPackage);
+
+  // Convert to numbers explicitly
+  const packagePrice = Number(selectedPkg?.price) || 0;
+  const guestCountNum = Number(guestCount) || 1;
+  const isPerPerson = selectedPkg?.pricingType === "per_person";
+
+  // Calculate base price based on pricing type
+  let basePriceDisplay = packagePrice;
+  if (isPerPerson) {
+    basePriceDisplay = packagePrice * guestCountNum;
+  }
+
+  // Calculate add-ons total
+  const addOnsTotal = selectedAddOns.reduce((total, addOnId) => {
+    const addOn = selectedPkg?.addOns.find(a => a.id === addOnId);
+    if (addOn) {
+      const extraPrice = Number(addOn.extraPrice) || 0;
+      if (addOn.pricingType === "per_person") {
+        return total + (extraPrice * guestCountNum);
+      }
+      return total + extraPrice;
+    }
+    return total;
+  }, 0);
+
+  // Calculate final totals
+  const totalAmount = basePriceDisplay + addOnsTotal;
+  const depositAmount = totalAmount * 0.2;
+
+  // Check if guest count is valid
+  const isGuestCountValid = () => {
+    if (!selectedPkg) return true;
+    const minGuests = selectedPkg.minGuests || 1;
+    const maxGuests = selectedPkg.maxGuests || 10000;
+    return guestCountNum >= minGuests && guestCountNum <= maxGuests;
+  };
+
+  const handleBooking = async () => {
+    if (!session) {
+      router.push("/login");
+      return;
+    }
+
+    if (!selectedPackage) {
+      alert("Please select a package");
+      return;
+    }
+
+    if (!eventDate) {
+      alert("Please select an event date");
+      return;
+    }
+
+    if (!eventTitle) {
+      alert("Please enter an event title (e.g., Rita's Wedding)");
+      return;
+    }
+
+    if (!isGuestCountValid()) {
+      alert(`Guest count must be between ${selectedPkg?.minGuests || 1} and ${selectedPkg?.maxGuests || 10000}`);
+      return;
+    }
+
+    setBooking(true);
+    try {
+      const response = await fetch("/api/vendor-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorId: vendor?.id,
+          packageId: selectedPackage,
+          addOnIds: selectedAddOns,
+          eventDate,
+          guestCount: guestCountNum,
+          eventTitle,
+          existingEventId: existingEventId || null,
+          totalAmount: totalAmount,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert("Booking request sent successfully!");
+        router.push(`/my-bookings`);
+      } else {
+        alert(data.error || "Booking failed");
+      }
+    } catch (error) {
+      console.error("Error booking vendor:", error);
+      alert("An error occurred");
+    } finally {
+      setBooking(false);
+    }
+  };
+
+  const fadeUp = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
+
+  const getServiceIcon = (serviceType: string) => {
+    const icons: Record<string, string> = {
+      venue: "🏛️",
+      catering: "🍽️",
+      photography: "📸",
+      decoration: "🎨",
+      makeup: "💄",
+      dj: "🎧",
+      transport: "🚐",
+      invitation: "💌",
+      fashion: "👗",
+      gifts: "🎁",
+    };
+    return icons[serviceType] || "🏪";
+  };
+
+  if (!mounted || status === "loading" || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-2 text-sm text-gray-500">Loading vendor details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!vendor) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-12">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Vendor not found</h1>
+          <Link href="/marketplace" className="mt-4 inline-block text-indigo-600 dark:text-indigo-400">
+            Back to Marketplace
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
+
+      {/* Main Content */}
+      <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={fadeUp}
+          className="space-y-6"
+        >
+          {/* Back Button */}
+          <Link
+            href={`/marketplace?eventId=${existingEventId || ''}&eventTitle=${encodeURIComponent(existingEventTitle || '')}&eventDate=${existingEventDate || ''}&guestCount=${existingGuestCount || ''}`}
+            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+          >
+            <ArrowLeftIcon className="h-4 w-4 mr-1" />
+            Back to Marketplace
+          </Link>
+
+          {/* Vendor Header with Profile Image */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="relative w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
+              {vendor.imageUrl ? (
+                <div className="relative w-full">
+                  <img
+                    src={vendor.imageUrl}
+                    alt={vendor.businessName}
+                    className="w-full h-auto max-h-96 object-contain mx-auto bg-gray-50 dark:bg-gray-800"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-64 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center">
+                  <BuildingOfficeIcon className="h-16 w-16 text-indigo-400" />
+                </div>
+              )}
+            </div>
+
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="text-5xl">
+                  {getServiceIcon(vendor.serviceType)}
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{vendor.businessName}</h1>
+                  <div className="flex items-center gap-3 mt-1 text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center">
+                      <MapPinIcon className="h-4 w-4 mr-1" />
+                      {vendor.location}
+                    </div>
+                    {vendor.rating && (
+                      <div className="flex items-center">
+                        <StarIcon className="h-4 w-4 mr-1 fill-current text-amber-500" />
+                        {vendor.rating}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">About</h2>
+              <p className="text-gray-600 dark:text-gray-400">{vendor.description || "Professional service provider for your special events."}</p>
+            </div>
+          </div>
+
+          {/* Package Selection with pricing type display */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Select Package</h2>
+
+            <div className="space-y-4">
+              {vendor.packages.map((pkg) => (
+                <div
+                  key={pkg.id}
+                  onClick={() => setSelectedPackage(pkg.id)}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPackage === pkg.id
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30"
+                      : "border-gray-200 dark:border-gray-700 hover:border-indigo-300"
+                    }`}
+                >
+                  <div className="flex gap-4">
+                    {pkg.imageUrl && (
+                      <div className="flex-shrink-0">
+                        <img
+                          src={pkg.imageUrl}
+                          alt={pkg.name}
+                          className="w-24 h-24 object-contain rounded-lg bg-gray-50 dark:bg-gray-700"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{pkg.name}</h3>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{pkg.description}</p>
+                          {/* Pricing type badge */}
+                          {pkg.pricingType === "per_person" ? (
+                            <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                              <UserGroupIcon className="h-3 w-3" />
+                              Per Person Pricing
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                              <CurrencyRupeeIcon className="h-3 w-3" />
+                              Fixed Price
+                            </span>
+                          )}
+                          {/* Guest limits */}
+                          {(pkg.minGuests || pkg.maxGuests) && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              {pkg.minGuests && pkg.maxGuests && `${pkg.minGuests} - ${pkg.maxGuests} guests`}
+                              {pkg.minGuests && !pkg.maxGuests && `Min ${pkg.minGuests} guests`}
+                              {!pkg.minGuests && pkg.maxGuests && `Max ${pkg.maxGuests} guests`}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+                            NPR {pkg.price.toLocaleString()}
+                            {pkg.pricingType === "per_person" && <span className="text-sm font-normal">/person</span>}
+                          </p>
+                          {pkg.pricingType === "per_person" && (
+                            <p className="text-xs text-gray-400">
+                              = NPR {(pkg.price * guestCountNum).toLocaleString()} total for {guestCountNum} guests
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Package Gallery */}
+          {selectedPkg && selectedPackageImages.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Package Gallery</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {selectedPackageImages.map((img, idx) => (
+                  <div
+                    key={idx}
+                    className="relative cursor-pointer group overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700"
+                    style={{ paddingBottom: '75%' }}
+                    onClick={() => {
+                      setCurrentImageIndex(idx);
+                      setShowGalleryModal(true);
+                    }}
+                  >
+                    <img
+                      src={img}
+                      alt={`Package ${idx + 1}`}
+                      className="absolute inset-0 w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add-Ons with per-person pricing display */}
+          {selectedPkg && selectedPkg.addOns.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Add-Ons</h2>
+
+              <div className="space-y-3">
+                {selectedPkg.addOns.map((addOn) => {
+                  const extraPrice = Number(addOn.extraPrice) || 0;
+                  const addOnPrice = addOn.pricingType === "per_person"
+                    ? extraPrice * guestCountNum
+                    : extraPrice;
+                  const priceSuffix = addOn.pricingType === "per_person" ? " (per person)" : "";
+
+                  return (
+                    <label
+                      key={addOn.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedAddOns.includes(addOn.id)}
+                          onChange={() => handleAddOnToggle(addOn.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">{addOn.name}</span>
+                        {addOn.pricingType === "per_person" && (
+                          <span className="text-xs text-gray-400">× {guestCountNum} guests</span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                          + NPR {extraPrice.toLocaleString()}{priceSuffix}
+                        </span>
+                        {addOn.pricingType === "per_person" && (
+                          <p className="text-xs text-gray-400">
+                            = NPR {addOnPrice.toLocaleString()} total
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Event Details with improved Guest Count Input */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Event Details</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Event Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={eventTitle}
+                  onChange={(e) => setEventTitle(e.target.value)}
+                  placeholder="e.g., Rita's Wedding"
+                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">This is your event name. You can book multiple vendors under this event.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Event Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Guest Count - Fixed typing behavior */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Expected Guest Count
+                  {isPerPerson ? (
+                    <span className="text-xs text-blue-600 ml-2">(Affects total price)</span>
+                  ) : (
+                    <span className="text-xs text-gray-400 ml-2">(For planning only - fixed price)</span>
+                  )}
+                </label>
+
+                <div className="flex items-center gap-3">
+                  {/* Decrease Button */}
+                  <button
+                    type="button"
+                    onClick={decrementGuestCount}
+                    disabled={selectedPkg?.minGuests ? guestCount <= selectedPkg.minGuests : guestCount <= 1}
+                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <MinusIcon className="h-4 w-4 mx-auto" />
+                  </button>
+
+                  {/* Direct Input Field - NO validation during typing */}
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={guestCountInput}
+                    onChange={handleGuestCountInputChange}
+                    onBlur={handleGuestCountBlur}
+                    className="w-28 text-center px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+
+                  {/* Increase Button */}
+                  <button
+                    type="button"
+                    onClick={incrementGuestCount}
+                    disabled={selectedPkg?.maxGuests ? guestCount >= selectedPkg.maxGuests : false}
+                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <PlusIcon className="h-4 w-4 mx-auto" />
+                  </button>
+                </div>
+
+                {/* Show valid range */}
+                {(selectedPkg?.minGuests || selectedPkg?.maxGuests) && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    Valid range: {selectedPkg?.minGuests || 1} - {selectedPkg?.maxGuests || "unlimited"} guests
+                  </p>
+                )}
+
+                {/* Info message for fixed price packages */}
+                {!isPerPerson && (
+                  <p className="text-xs text-gray-400 mt-2">
+                    ℹ️ Guest count is for planning only. Price is fixed regardless of number of guests.
+                  </p>
+                )}
+
+                {/* Guest limit warnings */}
+                {selectedPkg?.minGuests && guestCount < selectedPkg.minGuests && (
+                  <p className="text-xs text-red-500 mt-1">
+                    ❌ Minimum {selectedPkg.minGuests} guests required for this package
+                  </p>
+                )}
+                {selectedPkg?.maxGuests && guestCount > selectedPkg.maxGuests && (
+                  <p className="text-xs text-red-500 mt-1">
+                    ❌ Maximum {selectedPkg.maxGuests} guests for this package
+                  </p>
+                )}
+              </div>
+
+              {/* Show that data was pre-filled from existing event */}
+              {existingEventTitle && existingEventDate && existingGuestCount && (
+                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                    <InformationCircleIcon className="h-4 w-4" />
+                    Event details pre-filled from "{decodeURIComponent(existingEventTitle)}"
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Price Summary & Booking */}
+          {selectedPkg && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Price Summary</h2>
+
+              <div className="space-y-2 mb-4">
+                {/* Package Price Row */}
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">{selectedPkg.name} Package</span>
+                  <div className="text-right">
+                    <span className="font-medium">
+                      NPR {isPerPerson
+                        ? basePriceDisplay.toLocaleString()
+                        : packagePrice.toLocaleString()
+                      }
+                    </span>
+                    {isPerPerson && (
+                      <p className="text-xs text-gray-400">
+                        {packagePrice.toLocaleString()} NPR × {guestCountNum} guests
+                      </p>
+                    )}
+                    {!isPerPerson && (
+                      <p className="text-xs text-gray-400">
+                        Fixed price (guest count doesn't affect total)
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Add-ons Rows */}
+                {selectedAddOns.map(addOnId => {
+                  const addOn = selectedPkg.addOns.find(a => a.id === addOnId);
+                  if (!addOn) return null;
+                  const extraPrice = Number(addOn.extraPrice) || 0;
+                  const addOnPrice = addOn.pricingType === "per_person"
+                    ? extraPrice * guestCountNum
+                    : extraPrice;
+                  const priceNote = addOn.pricingType === "per_person"
+                    ? `(${extraPrice.toLocaleString()} NPR × ${guestCountNum} guests)`
+                    : "";
+
+                  return (
+                    <div key={addOn.id} className="flex justify-between text-sm">
+                      <span className="text-gray-500 dark:text-gray-400">+ {addOn.name}</span>
+                      <span>+ NPR {addOnPrice.toLocaleString()} {priceNote}</span>
+                    </div>
+                  );
+                })}
+
+                {/* Total Amount */}
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+                  <div className="flex justify-between font-bold">
+                    <span>Total Amount</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 text-xl">
+                      NPR {totalAmount.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-gray-500">Deposit (20%)</span>
+                    <span className="font-medium">NPR {depositAmount.toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    💰 Deposit of {depositAmount.toLocaleString()} NPR (20%) will be required at checkout
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleBooking}
+                disabled={booking || !eventTitle || !eventDate || !isGuestCountValid()}
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {booking ? (
+                  <>
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCartIcon className="h-5 w-5" />
+                    Proceed to Book (20% Deposit)
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </motion.div>
+      </main>
+
+      {/* Gallery Modal */}
+      {showGalleryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setShowGalleryModal(false)}>
+          <div className="relative max-w-5xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setShowGalleryModal(false)}
+              className="absolute -top-12 right-0 text-white hover:text-gray-300 transition-colors flex items-center gap-1"
+            >
+              <XMarkIcon className="h-5 w-5" />
+              Close
+            </button>
+
+            <div className="relative bg-black rounded-lg overflow-hidden">
+              <img
+                src={selectedPackageImages[currentImageIndex]}
+                alt="Gallery"
+                className="w-full h-auto max-h-[80vh] object-contain"
+              />
+            </div>
+
+            {selectedPackageImages.length > 1 && (
+              <div className="flex justify-between mt-4 gap-2">
+                <button
+                  onClick={() => setCurrentImageIndex(prev => (prev > 0 ? prev - 1 : selectedPackageImages.length - 1))}
+                  className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors flex items-center gap-1"
+                >
+                  <ChevronLeftIcon className="h-4 w-4" />
+                  Previous
+                </button>
+                <span className="text-white py-2 px-4 bg-white/10 rounded-lg">
+                  {currentImageIndex + 1} / {selectedPackageImages.length}
+                </span>
+                <button
+                  onClick={() => setCurrentImageIndex(prev => (prev < selectedPackageImages.length - 1 ? prev + 1 : 0))}
+                  className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRightIcon className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
