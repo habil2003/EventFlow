@@ -10,6 +10,7 @@ interface SimpleQrScannerProps {
 export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScannerProps) {
   const [isScanning, setIsScanning] = useState(false);
   const [status, setStatus] = useState<string>("Initializing...");
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [retryCount, setRetryCount] = useState(0);
   const scannerRef = useRef<any>(null);
   const containerId = "qr-reader-container";
@@ -17,58 +18,107 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
   const cameraStartedRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const addDebugLog = (msg: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const log = `[${timestamp}] ${msg}`;
+    console.log("🔍 [Scanner Debug]:", log);
+    setDebugLogs(prev => [...prev.slice(-8), log]);
+  };
+
   const loadScanner = async () => {
+    addDebugLog("Loading html5-qrcode library...");
     const { Html5Qrcode } = await import("html5-qrcode");
+    addDebugLog("✅ html5-qrcode loaded");
     return Html5Qrcode;
   };
 
-  // ✅ FIX: Check if camera is supported
   const isCameraSupported = (): boolean => {
-    if (typeof window === 'undefined') return false;
-    // Check if mediaDevices exists and getUserMedia exists
-    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    addDebugLog(`Checking camera support...`);
+    addDebugLog(`Protocol: ${window.location.protocol}`);
+    addDebugLog(`Host: ${window.location.host}`);
+    
+    if (typeof window === 'undefined') {
+      addDebugLog("❌ Window is undefined");
+      return false;
+    }
+    
+    const hasMediaDevices = !!(navigator.mediaDevices);
+    addDebugLog(`navigator.mediaDevices: ${hasMediaDevices ? '✅' : '❌'}`);
+    
+    const hasGetUserMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    addDebugLog(`getUserMedia: ${hasGetUserMedia ? '✅' : '❌'}`);
+    
+    return hasGetUserMedia;
   };
 
-  // ✅ FIX: Start scanner directly without listing cameras first
+  const testCameraAccess = async () => {
+    addDebugLog("Testing camera access...");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+      });
+      stream.getTracks().forEach(track => track.stop());
+      addDebugLog("✅ Camera test successful!");
+      return true;
+    } catch (err: any) {
+      addDebugLog(`❌ Camera test failed: ${err.name} - ${err.message}`);
+      return false;
+    }
+  };
+
   const startScanner = async () => {
-    if (!isMounted.current || cameraStartedRef.current) return;
+    if (!isMounted.current || cameraStartedRef.current) {
+      addDebugLog(`Skipping start: mounted=${isMounted.current}, started=${cameraStartedRef.current}`);
+      return;
+    }
     
-    // ✅ Check camera support
+    addDebugLog("🔴 Starting scanner...");
+    setStatus("Starting camera...");
+    
+    // Check camera support
     if (!isCameraSupported()) {
       setStatus("❌ Camera not supported. Please use a modern browser with HTTPS.");
       onError?.("Camera not supported");
       return;
     }
     
-    setStatus("Starting camera...");
+    // Test camera access
+    const cameraWorks = await testCameraAccess();
+    if (!cameraWorks) {
+      setStatus("❌ Camera test failed. Check permissions.");
+      return;
+    }
     
     try {
-      // Clean up any existing scanner - safely
+      // Clean up any existing scanner
       if (scannerRef.current) {
+        addDebugLog("Cleaning up existing scanner...");
         try {
           await scannerRef.current.stop();
           await scannerRef.current.clear();
         } catch (e) {
-          // Ignore cleanup errors
-          console.log("Cleanup error (ignored):", e);
+          addDebugLog(`Cleanup error (ignored): ${e}`);
         }
         scannerRef.current = null;
       }
 
-      // ✅ FIX: Clear the container before creating new scanner
+      // Clear the container
       const container = document.getElementById(containerId);
       if (container) {
-        // Remove all child nodes safely
         while (container.firstChild) {
           container.removeChild(container.firstChild);
         }
+        addDebugLog("Container cleared");
+      } else {
+        addDebugLog(`❌ Container not found: ${containerId}`);
       }
 
       const Html5Qrcode = await loadScanner();
+      addDebugLog("Creating Html5Qrcode instance...");
       const html5QrCode = new Html5Qrcode(containerId);
       scannerRef.current = html5QrCode;
+      addDebugLog("✅ Html5Qrcode instance created");
 
-      // Dynamic QR box sizing
       const containerWidth = container?.clientWidth || 400;
       const qrSize = Math.min(containerWidth * 0.7, 350);
 
@@ -78,30 +128,29 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
         aspectRatio: 1.0,
       };
 
-      console.log("📷 Starting scanner with config:", config);
+      addDebugLog(`Config: fps=${config.fps}, qrbox=${qrSize}x${qrSize}`);
       setStatus("📷 Starting camera...");
 
-      // ✅ Use direct camera access
+      addDebugLog("Calling html5QrCode.start()...");
       await html5QrCode.start(
         { facingMode: "environment" },
         config,
         (decodedText: string) => {
           const cleanText = decodedText.trim().replace(/[\x00-\x1F\x7F]/g, '');
-          console.log("✅ QR Code detected:", cleanText.substring(0, 50) + "...");
+          addDebugLog(`✅ QR Code detected! (${cleanText.length} chars)`);
           setStatus(`✅ QR Code detected! Processing...`);
-          
           if (isMounted.current) {
             onScanSuccess(cleanText);
           }
         },
         (errorMessage: string) => {
-          // Silent keep scanning for "No QR code found"
           if (!errorMessage.includes("No QR code found")) {
-            console.warn("⚠️ Scan warning:", errorMessage);
+            addDebugLog(`⚠️ Scan warning: ${errorMessage}`);
           }
         }
       );
       
+      addDebugLog("✅ Scanner started successfully!");
       if (isMounted.current) {
         setIsScanning(true);
         cameraStartedRef.current = true;
@@ -109,13 +158,13 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
         setRetryCount(0);
       }
       
-    } catch (err) {
+    } catch (err: any) {
+      addDebugLog(`❌ Error starting scanner: ${err.name} - ${err.message}`);
       console.error("❌ Error starting scanner:", err);
       
       if (isMounted.current) {
         const errorMsg = err instanceof Error ? err.message : "Could not start camera";
         
-        // ✅ Better error messages for common issues
         let userFriendlyMsg = errorMsg;
         if (errorMsg.includes("NotAllowedError") || errorMsg.includes("Permission")) {
           userFriendlyMsg = "Camera permission denied. Please allow camera access in browser settings.";
@@ -123,26 +172,16 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
           userFriendlyMsg = "No camera found. Please connect a camera and refresh.";
         } else if (errorMsg.includes("NotReadableError")) {
           userFriendlyMsg = "Camera is in use by another application. Please close other apps.";
-        } else if (errorMsg.includes("OverconstrainedError")) {
-          userFriendlyMsg = "Camera doesn't support the required settings. Trying with default settings...";
-          // Try again with default settings
-          setTimeout(() => {
-            if (isMounted.current && !cameraStartedRef.current) {
-              startScannerWithFallback();
-            }
-          }, 1000);
-          return;
         }
         
         setStatus(`❌ ${userFriendlyMsg}`);
         onError?.(userFriendlyMsg);
         
-        // Retry up to 3 times
         if (retryCount < 3 && !errorMsg.includes("Permission")) {
           setRetryCount(prev => prev + 1);
+          addDebugLog(`🔄 Retrying scanner (${retryCount + 1}/3)...`);
           setTimeout(() => {
             if (isMounted.current && !cameraStartedRef.current) {
-              console.log(`🔄 Retrying scanner (${retryCount + 1}/3)...`);
               startScanner();
             }
           }, 2000);
@@ -151,102 +190,19 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
     }
   };
 
-  // ✅ FIX: Fallback start with default camera
-  const startScannerWithFallback = async () => {
-    if (!isMounted.current || cameraStartedRef.current) return;
-    
-    try {
-      const Html5Qrcode = await loadScanner();
-      const html5QrCode = new Html5Qrcode(containerId);
-      scannerRef.current = html5QrCode;
-
-      const container = document.getElementById(containerId);
-      const containerWidth = container?.clientWidth || 400;
-      const qrSize = Math.min(containerWidth * 0.7, 350);
-
-      const config = {
-        fps: 15,
-        qrbox: { width: qrSize, height: qrSize },
-        aspectRatio: 1.0,
-      };
-
-      // ✅ Use default camera (no facingMode constraint)
-      await html5QrCode.start(
-        { facingMode: "user" }, // Try front camera as fallback
-        config,
-        (decodedText: string) => {
-          const cleanText = decodedText.trim().replace(/[\x00-\x1F\x7F]/g, '');
-          if (isMounted.current) {
-            onScanSuccess(cleanText);
-          }
-        },
-        (errorMessage: string) => {
-          if (!errorMessage.includes("No QR code found")) {
-            console.warn("⚠️ Scan warning:", errorMessage);
-          }
-        }
-      );
-      
-      if (isMounted.current) {
-        setIsScanning(true);
-        cameraStartedRef.current = true;
-        setStatus("✅ Scanning active (front camera). Position QR code in the frame.");
-        setRetryCount(0);
-      }
-      
-    } catch (err) {
-      console.error("❌ Fallback scanner also failed:", err);
-      setStatus("❌ Camera not available. Please use the test mode.");
-    }
-  };
-
-  // ✅ FIX: Try to start camera (checks support first)
-  const tryStartCamera = async () => {
-    if (isScanning || cameraStartedRef.current) return;
-    
-    // ✅ Check if camera is supported
-    if (!isCameraSupported()) {
-      setStatus("❌ Camera not supported. Please use HTTPS or a modern browser.");
-      onError?.("Camera not supported");
-      return;
-    }
-    
-    // ✅ Check if we have camera permission
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
-      });
-      stream.getTracks().forEach(track => track.stop());
-      // Permission granted, start scanner
-      await startScanner();
-    } catch (err: any) {
-      console.warn("Camera permission check failed:", err);
-      
-      // If permission denied, show message
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        setStatus("❌ Camera permission denied. Please allow camera access.");
-        onError?.("Camera permission denied");
-        return;
-      }
-      
-      // Try to start anyway - maybe it works
-      await startScanner();
-    }
-  };
-
   const stopScanner = async () => {
     if (!isMounted.current) return;
-    
+    addDebugLog("Stopping scanner...");
     if (scannerRef.current) {
-      setStatus("Stopping camera...");
       try {
         await scannerRef.current.stop();
         await scannerRef.current.clear();
         scannerRef.current = null;
         cameraStartedRef.current = false;
         setStatus("Camera stopped.");
+        addDebugLog("✅ Scanner stopped");
       } catch (err) {
-        console.error("Error stopping scanner:", err);
+        addDebugLog(`Error stopping scanner: ${err}`);
         scannerRef.current = null;
         cameraStartedRef.current = false;
         setStatus("Camera stopped.");
@@ -255,43 +211,40 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
     setIsScanning(false);
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     isMounted.current = true;
     cameraStartedRef.current = false;
+    addDebugLog("Component mounted");
     
-    // ✅ Check camera support on mount
     if (!isCameraSupported()) {
       setStatus("❌ Camera not supported in this browser. Please use HTTPS.");
       return;
     }
     
-    // Auto-start on mount with a small delay
     const timer = setTimeout(() => {
       if (isMounted.current) {
-        console.log("📷 Auto-starting scanner...");
-        tryStartCamera();
+        addDebugLog("Auto-starting scanner after 1s delay...");
+        startScanner();
       }
     }, 1000);
 
     return () => {
       clearTimeout(timer);
       isMounted.current = false;
+      addDebugLog("Component unmounting...");
       if (scannerRef.current) {
         try {
           scannerRef.current.stop().catch(() => {});
           scannerRef.current.clear().catch(() => {});
-        } catch (e) {
-          // Ignore cleanup errors
-        }
+        } catch (e) {}
         scannerRef.current = null;
       }
       cameraStartedRef.current = false;
     };
   }, []);
 
-  // ✅ Manual retry handler
   const handleRetry = async () => {
+    addDebugLog("🔄 Manual retry triggered");
     setStatus("Retrying...");
     cameraStartedRef.current = false;
     setIsScanning(false);
@@ -299,13 +252,26 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
     await stopScanner();
     setTimeout(() => {
       if (isMounted.current) {
-        tryStartCamera();
+        startScanner();
       }
     }, 500);
   };
 
   return (
     <div className="w-full" ref={containerRef}>
+      {/* Debug Logs */}
+      <div className="mb-2 p-2 bg-gray-900 rounded-lg text-xs font-mono text-green-400 max-h-32 overflow-y-auto">
+        {debugLogs.length === 0 ? (
+          <div className="text-gray-500">Waiting for logs...</div>
+        ) : (
+          debugLogs.map((log, i) => (
+            <div key={i} className="border-b border-gray-700 pb-0.5 mb-0.5">
+              {log}
+            </div>
+          ))
+        )}
+      </div>
+
       {/* Status Message */}
       <div className={`mb-3 p-2 rounded-lg text-sm text-center transition-colors ${
         status.includes('✅') ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
@@ -323,18 +289,16 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
         className="w-full rounded-lg overflow-hidden bg-black relative"
         style={{ minHeight: "300px" }}
       >
-        {/* Loading overlay */}
         {!isScanning && !status.includes('❌') && status !== 'Camera stopped.' && !status.includes('not supported') && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white">
             <div className="text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-white border-t-transparent mb-2"></div>
               <p className="text-sm">{status.includes('Starting') ? 'Starting camera...' : 'Initializing...'}</p>
-              <p className="text-xs text-gray-400 mt-1">Please grant camera permission if prompted</p>
+              <p className="text-xs text-gray-400 mt-1">Check debug logs above</p>
             </div>
           </div>
         )}
         
-        {/* Error overlay */}
         {(status.includes('❌') || status.includes('not supported')) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white">
             <div className="text-center p-4 max-w-xs">

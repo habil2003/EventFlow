@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -31,13 +32,13 @@ interface Ticket {
   totalAmount: number;
   checkedIn: boolean;
   transactionId: string;
-  // ✅ New fields
   paymentStatus: string;
   refundStatus?: string | null;
   refundAmount?: number | null;
 }
 
-export default function MyTicketsPage() {
+// ✅ Component that uses useSearchParams()
+function TicketsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -96,7 +97,7 @@ export default function MyTicketsPage() {
     const reason = prompt(
       `Cancel this ticket?\n\nRefund policy: ${policyText}\n\nReason for cancellation (optional):`
     );
-    if (reason === null) return; // user dismissed
+    if (reason === null) return;
 
     if (
       !confirm(
@@ -161,7 +162,6 @@ export default function MyTicketsPage() {
     );
   }
 
-  // ✅ Fixed splits — cancelled tickets excluded from upcoming and past
   const upcomingTickets = tickets.filter(
     (t) =>
       !t.checkedIn &&
@@ -200,7 +200,6 @@ export default function MyTicketsPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
 
-        {/* Header */}
         <motion.div
           initial="hidden"
           animate="visible"
@@ -223,7 +222,6 @@ export default function MyTicketsPage() {
           </div>
         </motion.div>
 
-        {/* Payment Success Message */}
         {paymentSuccess === "success" && (
           <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
             <div className="flex items-center gap-3">
@@ -235,7 +233,6 @@ export default function MyTicketsPage() {
           </div>
         )}
 
-        {/* Upcoming Tickets */}
         <div className="mb-12">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Upcoming Tickets
@@ -367,7 +364,6 @@ export default function MyTicketsPage() {
                           </div>
                         </div>
 
-                        {/* Action Buttons */}
                         <div className="flex flex-col gap-2 min-w-[160px]">
                           <Link
                             href={`/tickets/${ticket.id}`}
@@ -377,7 +373,6 @@ export default function MyTicketsPage() {
                             View QR Code
                           </Link>
 
-                          {/* ✅ Cancel button */}
                           <button
                             onClick={() => handleCancelTicket(ticket)}
                             disabled={isCancelling}
@@ -405,7 +400,6 @@ export default function MyTicketsPage() {
           )}
         </div>
 
-        {/* Past Tickets */}
         {pastTickets.length > 0 && (
           <div className="mb-12">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -453,7 +447,6 @@ export default function MyTicketsPage() {
           </div>
         )}
 
-        {/* ✅ Cancelled Tickets */}
         {cancelledTickets.length > 0 && (
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -486,7 +479,6 @@ export default function MyTicketsPage() {
                       </div>
                     </div>
 
-                    {/* Refund status */}
                     <div className="min-w-[180px]">
                       {ticket.refundStatus === "PENDING_ADMIN" && (
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
@@ -548,5 +540,23 @@ export default function MyTicketsPage() {
 
       </main>
     </div>
+  );
+}
+
+// ✅ Main export with Suspense boundary
+export default function MyTicketsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent dark:border-indigo-400"></div>
+          <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            Loading your tickets...
+          </p>
+        </div>
+      </div>
+    }>
+      <TicketsContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -39,11 +39,10 @@ interface Vendor {
   pricingType?: string;
 }
 
-export default function MarketplacePage() {
+// ✅ Component that uses useSearchParams()
+function MarketplaceContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
-
-  // ✅ Remove useTheme - not needed
 
   const [mounted, setMounted] = useState(false);
 
@@ -371,5 +370,23 @@ export default function MarketplacePage() {
         )}
       </main>
     </div>
+  );
+}
+
+// ✅ Main export with Suspense boundary
+export default function MarketplacePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent dark:border-indigo-400"></div>
+          <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            Loading marketplace...
+          </p>
+        </div>
+      </div>
+    }>
+      <MarketplaceContent />
+    </Suspense>
   );
 }

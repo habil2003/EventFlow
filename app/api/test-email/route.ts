@@ -44,9 +44,11 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Test email error:', error);
+    
+    // ✅ FIX: Handle unknown error type safely
     return NextResponse.json({ 
-      error: 'Failed to send email', 
-      details: error.message 
+      error: 'Failed to send email',
+      details: error instanceof Error ? error.message : 'Unknown error occurred'
     }, { status: 500 });
   }
 }

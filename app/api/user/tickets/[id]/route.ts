@@ -8,7 +8,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Unwrap the params promise
     const { id } = await params;
 
     const session = await getServerSession(authOptions);
@@ -20,7 +19,6 @@ export async function GET(
       );
     }
 
-    // Fetch ticket with all needed relationships
     const ticket = await prisma.ticketBooking.findFirst({
       where: {
         id: id,
@@ -46,12 +44,11 @@ export async function GET(
       );
     }
 
-    // ✅ Return complete ticket data with all fields needed for QR
     const formattedTicket = {
       id: ticket.id,
       ticketNumber: ticket.ticketNumber,
-      eventId: ticket.eventId, // ✅ ADDED - needed for QR validation
-      userId: ticket.userId, // ✅ ADDED - for QR payload
+      eventId: ticket.eventId,
+      userId: ticket.userId,
       eventTitle: ticket.event.title,
       eventDate: ticket.event.eventDate,
       eventTime: ticket.event.eventTime,
@@ -63,29 +60,20 @@ export async function GET(
       checkedIn: ticket.checkedIn,
       checkedInAt: ticket.checkedInAt,
       transactionId: ticket.transactionId,
-      paymentStatus: ticket.paymentStatus, // ✅ ADDED - for validation
-      createdAt: ticket.createdAt, // ✅ ADDED - for QR timestamp
-      paymentIntentId: ticket.paymentIntentId,
-      gateway: ticket.gateway,
-      // Include user info for display
+      paymentStatus: ticket.paymentStatus,
+      createdAt: ticket.createdAt,
       user: {
         name: ticket.user.name,
         email: ticket.user.email,
       },
     };
 
-    // Log successful fetch for debugging
-    console.log(`📋 Ticket fetched: ${ticket.ticketNumber} for ${ticket.user.name}`);
-
     return NextResponse.json(formattedTicket);
     
   } catch (error) {
-    console.error("❌ Error fetching ticket:", error);
+    console.error("Error fetching ticket:", error);
     return NextResponse.json(
-      { 
-        error: "Failed to fetch ticket",
-        message: process.env.NODE_ENV === 'development' ? String(error) : undefined
-      },
+      { error: "Failed to fetch ticket" },
       { status: 500 }
     );
   }

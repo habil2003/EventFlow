@@ -152,7 +152,8 @@ export async function GET() {
       // Calculate days until event
       let daysUntilEvent = refundDetails.daysUntilEvent;
       if (!daysUntilEvent && refund.vendorBooking?.userSocialEvent?.eventDate) {
-        const cancellationDate = refund.createdAt || refund.cancelledAt || new Date();
+        // ✅ FIX: cancelledAt doesn't exist
+        const cancellationDate = refund.createdAt || new Date();
         daysUntilEvent = calculateDaysUntilEvent(
           refund.vendorBooking.userSocialEvent.eventDate,
           cancellationDate
@@ -235,7 +236,8 @@ export async function GET() {
         id: refund.id,
         bookingId: refund.ticketBookingId,
         type: "TICKET",
-        vendorName: refund.ticketBooking?.event?.organizer?.name || "Event Organizer",
+        // ✅ FIX: organizer doesn't exist, use organizerId
+        vendorName: refund.ticketBooking?.event?.organizerId || "Event Organizer",
         eventTitle: refund.ticketBooking?.event?.title || "Unknown Event",
         eventDate: refund.ticketBooking?.event?.eventDate,
         packageName: refund.ticketBooking?.tier?.name || "Ticket",

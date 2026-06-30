@@ -52,6 +52,7 @@ interface RecentBooking {
   totalAmount: number;
   createdAt: string;
   checkedIn: boolean;
+  quantity?: number; // ✅ ADDED: Make quantity optional
 }
 
 export default function OrganizerEventDetailPage({ params }: { params: { id: string } }) {
@@ -59,8 +60,8 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
   
-  // ✅ React is now imported, so React.use() works
-  const unwrappedParams = React.use(params as any);
+  // ✅ FIX 1: Cast params to the correct type
+  const unwrappedParams = React.use(params as any) as { id: string };
   const eventId = unwrappedParams.id;
   
   const [event, setEvent] = useState<Event | null>(null);
@@ -140,9 +141,10 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
   }
 
   const soldPercentage = event.capacity > 0 ? (event.totalTicketsSold / event.capacity) * 100 : 0;
+  // ✅ FIX 2: Handle quantity properly with fallback
   const checkedInCount = recentBookings
-  .filter(b => b.checkedIn)
-  .reduce((sum, b) => sum + (b.quantity || 1), 0);
+    .filter(b => b.checkedIn)
+    .reduce((sum, b) => sum + (b.quantity || 1), 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">

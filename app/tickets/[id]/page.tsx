@@ -19,7 +19,8 @@ import {
   IdentificationIcon,
   CreditCardIcon,
   SparklesIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  BanknotesIcon
 } from "@heroicons/react/24/outline";
 
 interface Ticket {
@@ -35,10 +36,10 @@ interface Ticket {
   qrCodeHash: string;
   checkedIn: boolean;
   transactionId: string;
-  eventId: string; // ✅ Added this
-  userId: string; // ✅ Added this
-  createdAt: string; // ✅ Added this
-  paymentStatus: string; // ✅ Added this
+  eventId: string;
+  userId: string;
+  createdAt: string;
+  paymentStatus: string;
 }
 
 export default function TicketDetailPage() {
@@ -65,30 +66,25 @@ export default function TicketDetailPage() {
         console.log("📋 Ticket data:", data);
         setTicket(data);
         
-        // ✅ Generate QR code with JSON data (industry standard)
         if (data.qrCodeHash && data.id) {
           try {
-            // Create QR payload with all necessary data
             const qrPayload = {
               ticketId: data.id,
               eventId: data.eventId,
               hash: data.qrCodeHash,
               userId: data.userId,
               timestamp: data.createdAt || new Date().toISOString(),
-              // Optional: Add a signature for security
               signature: generateSignature(data.id, data.qrCodeHash, data.eventId)
             };
             
             console.log("📱 Generating QR with payload:", qrPayload);
             
-            // Convert to JSON string
             const qrData = JSON.stringify(qrPayload);
             
-            // Generate QR with high error correction
             const qrUrl = await QRCode.toDataURL(qrData, {
               width: 300,
               margin: 2,
-              errorCorrectionLevel: 'H', // Highest error correction
+              errorCorrectionLevel: 'H',
               color: {
                 dark: '#1a1a1a',
                 light: '#ffffff'
@@ -100,7 +96,6 @@ export default function TicketDetailPage() {
           } catch (qrErr) {
             console.error("❌ QR generation error:", qrErr);
             setQrError("Failed to generate QR code");
-            // ✅ Fallback: Generate QR with just the hash (backward compatible)
             try {
               const fallbackUrl = await QRCode.toDataURL(data.qrCodeHash, {
                 width: 300,
@@ -124,11 +119,8 @@ export default function TicketDetailPage() {
     fetchTicket();
   }, [params.id]);
 
-  // ✅ Helper function to generate a simple signature
   const generateSignature = (ticketId: string, hash: string, eventId: string) => {
-    // Simple signature - in production, use a proper crypto method
     const data = `${ticketId}-${hash}-${eventId}`;
-    // This is a simple hash - consider using crypto.createHmac in production
     let signature = 0;
     for (let i = 0; i < data.length; i++) {
       signature = ((signature << 5) - signature) + data.charCodeAt(i);
@@ -148,7 +140,6 @@ export default function TicketDetailPage() {
   const copyTicketId = () => {
     if (ticket?.id) {
       navigator.clipboard.writeText(ticket.id);
-      // Show temporary notification
       const notification = document.createElement('div');
       notification.className = 'fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm z-50';
       notification.textContent = 'Ticket ID copied for manual check-in';
@@ -184,12 +175,71 @@ export default function TicketDetailPage() {
   const isCheckedIn = ticket.checkedIn;
   const eventDate = new Date(ticket.eventDate);
   const isUpcoming = eventDate > new Date();
-  const isPaid = ticket.paymentStatus === "COMPLETED";
+  
+  // ✅ Updated payment status logic
+  const isPaid = ticket.paymentStatus === "COMPLETED" || ticket.paymentStatus === "HELD_IN_ESCROW";
+  const isPaymentPending = ticket.paymentStatus === "PENDING";
+  const isPaymentFailed = ticket.paymentStatus === "FAILED";
+
+  // ✅ Helper to get payment status display
+  const getPaymentStatusDisplay = () => {
+    switch (ticket.paymentStatus) {
+      case "COMPLETED":
+        return { text: "Paid", color: "text-green-600 dark:text-green-400", bg: "bg-green-500" };
+      case "HELD_IN_ESCROW":
+        return { text: "Payment Confirmed (Escrow)", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500" };
+      case "PENDING":
+        return { text: "Awaiting Payment", color: "text-yellow-600 dark:text-yellow-400", bg: "bg-yellow-500" };
+      case "FAILED":
+        return { text: "Payment Failed", color: "text-red-600 dark:text-red-400", bg: "bg-red-500" };
+      default:
+        return { text: ticket.paymentStatus || "Unknown", color: "text-gray-500", bg: "bg-gray-500" };
+    }
+  };
+
+  // ✅ Helper to get ticket status badge
+  const getTicketStatusBadge = () => {
+    if (isCheckedIn) {
+      return {
+        text: "Checked In",
+        icon: CheckCircleIcon,
+        color: "bg-green-500"
+      };
+    }
+    if (isUpcoming && isPaid) {
+      return {
+        text: "Active",
+        icon: ClockIcon,
+        color: "bg-blue-500"
+      };
+    }
+    if (isPaymentPending) {
+      return {
+        text: "Payment Pending",
+        icon: ClockIcon,
+        color: "bg-yellow-500"
+      };
+    }
+    if (isPaymentFailed) {
+      return {
+        text: "Payment Failed",
+        icon: XCircleIcon,
+        color: "bg-red-500"
+      };
+    }
+    return {
+      text: "Expired",
+      icon: XCircleIcon,
+      color: "bg-gray-500"
+    };
+  };
+
+  const statusBadge = getTicketStatusBadge();
+  const paymentDisplay = getPaymentStatusDisplay();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-8">
       <div className="max-w-2xl mx-auto px-4">
-        {/* Back Button */}
         <Link
           href="/my-tickets"
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mb-6 group"
@@ -198,7 +248,6 @@ export default function TicketDetailPage() {
           Back to My Tickets
         </Link>
 
-        {/* Ticket Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -214,31 +263,10 @@ export default function TicketDetailPage() {
                 <span className="text-white font-semibold">Event Ticket</span>
               </div>
               <div className="flex items-center gap-2">
-                {!isPaid && (
-                  <div className="flex items-center space-x-1 bg-yellow-500 px-3 py-1.5 rounded-full">
-                    <span className="text-xs text-white font-medium">Payment Pending</span>
-                  </div>
-                )}
-                {isCheckedIn ? (
-                  <div className="flex items-center space-x-1 bg-green-500 px-3 py-1.5 rounded-full">
-                    <CheckCircleIcon className="h-3.5 w-3.5 text-white" />
-                    <span className="text-xs text-white font-medium">Checked In</span>
-                  </div>
-                ) : isUpcoming && isPaid ? (
-                  <div className="flex items-center space-x-1 bg-blue-500 px-3 py-1.5 rounded-full">
-                    <ClockIcon className="h-3.5 w-3.5 text-white" />
-                    <span className="text-xs text-white font-medium">Active</span>
-                  </div>
-                ) : !isPaid ? (
-                  <div className="flex items-center space-x-1 bg-yellow-500 px-3 py-1.5 rounded-full">
-                    <span className="text-xs text-white font-medium">Pending</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-1 bg-gray-500 px-3 py-1.5 rounded-full">
-                    <XCircleIcon className="h-3.5 w-3.5 text-white" />
-                    <span className="text-xs text-white font-medium">Expired</span>
-                  </div>
-                )}
+                <div className={`flex items-center space-x-1 ${statusBadge.color} px-3 py-1.5 rounded-full`}>
+                  <statusBadge.icon className="h-3.5 w-3.5 text-white" />
+                  <span className="text-xs text-white font-medium">{statusBadge.text}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -284,7 +312,7 @@ export default function TicketDetailPage() {
               </div>
             </div>
 
-            {/* Divider with ticket notch effect */}
+            {/* Divider */}
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-dashed border-gray-200 dark:border-gray-700"></div>
@@ -322,7 +350,6 @@ export default function TicketDetailPage() {
                 </div>
               </div>
               
-              {/* ✅ NEW: Show Ticket ID for manual check-in */}
               <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center">
                   <ShieldCheckIcon className="h-4 w-4 text-gray-400 mr-2" />
@@ -370,18 +397,14 @@ export default function TicketDetailPage() {
                 </code>
               </div>
 
-              {/* ✅ NEW: Payment Status */}
+              {/* ✅ Updated Payment Status */}
               <div className="flex justify-between py-2">
                 <div className="flex items-center">
+                  <BanknotesIcon className="h-4 w-4 text-gray-400 mr-2" />
                   <span className="text-gray-500 dark:text-gray-400 text-sm">Payment Status</span>
                 </div>
-                <span className={`text-sm font-medium ${
-                  ticket.paymentStatus === "COMPLETED" ? "text-green-600 dark:text-green-400" :
-                  ticket.paymentStatus === "PENDING" ? "text-yellow-600 dark:text-yellow-400" :
-                  ticket.paymentStatus === "FAILED" ? "text-red-600 dark:text-red-400" :
-                  "text-gray-500"
-                }`}>
-                  {ticket.paymentStatus}
+                <span className={`text-sm font-medium ${paymentDisplay.color}`}>
+                  {paymentDisplay.text}
                 </span>
               </div>
             </div>
@@ -405,7 +428,6 @@ export default function TicketDetailPage() {
                         <span className="text-white text-xs text-center p-2">{qrError}</span>
                       </div>
                     )}
-                    {/* ✅ NEW: QR Code version indicator */}
                     <div className="absolute -bottom-1 -right-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[8px] px-1.5 py-0.5 rounded-full">
                       v2
                     </div>
@@ -419,7 +441,6 @@ export default function TicketDetailPage() {
               <p className="text-center text-xs text-gray-400 mt-4">
                 Please present this QR code at the venue entrance for check-in
               </p>
-              {/* ✅ NEW: Show QR data info */}
               {process.env.NODE_ENV === 'development' && ticket && (
                 <details className="mt-2 text-xs text-gray-400">
                   <summary className="cursor-pointer">Debug Info</summary>
@@ -434,7 +455,7 @@ export default function TicketDetailPage() {
               )}
             </div>
 
-            {/* Footer Note */}
+            {/* ✅ Updated Footer Notes */}
             {!isCheckedIn && isUpcoming && isPaid && (
               <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
@@ -443,10 +464,18 @@ export default function TicketDetailPage() {
               </div>
             )}
             
-            {!isPaid && (
+            {isPaymentPending && (
               <div className="mt-6 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
                 <p className="text-xs text-yellow-600 dark:text-yellow-400 text-center">
                   ⏳ Payment pending. Please complete payment to access the event.
+                </p>
+              </div>
+            )}
+
+            {isPaymentFailed && (
+              <div className="mt-6 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <p className="text-xs text-red-600 dark:text-red-400 text-center">
+                  ❌ Payment failed. Please contact support for assistance.
                 </p>
               </div>
             )}
@@ -456,6 +485,14 @@ export default function TicketDetailPage() {
                 <p className="text-xs text-green-600 dark:text-green-400 text-center flex items-center justify-center gap-1">
                   <CheckCircleIcon className="h-3.5 w-3.5" />
                   ✓ You have been checked in for this event
+                </p>
+              </div>
+            )}
+
+            {isPaid && !isCheckedIn && !isUpcoming && (
+              <div className="mt-6 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                  This event has passed. Check-in is no longer available.
                 </p>
               </div>
             )}

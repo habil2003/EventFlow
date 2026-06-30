@@ -3,11 +3,62 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// ============================================
+// CONSTANTS (Use `as const` for type safety, but cast for Prisma)
+// ============================================
+
+const ALLOWED_PAYMENT_STATUSES = ["COMPLETED", "HELD_IN_ESCROW"] as const;
+const GRACE_PERIOD_HOURS = 24;
+
+type AllowedPaymentStatus = typeof ALLOWED_PAYMENT_STATUSES[number];
+
+// ============================================
+// HELPERS
+// ============================================
+
+function isValidPaymentStatus(status: string): status is AllowedPaymentStatus {
+  return ALLOWED_PAYMENT_STATUSES.includes(status as AllowedPaymentStatus);
+}
+
+function getPaymentStatusMessage(status: string): string {
+  const messages: Record<string, string> = {
+    "PENDING": "payment is pending",
+    "PROCESSING_PAYOUT": "payment is being processed",
+    "FAILED": "payment failed",
+    "REFUNDED": "ticket has been refunded",
+    "DISPUTED": "ticket is under dispute",
+  };
+  return messages[status] || status;
+}
+
+function isEventActive(eventDate: Date, isCompleted: boolean): { active: boolean; message?: string } {
+  if (isCompleted) {
+    return { active: false, message: "Event has already ended" };
+  }
+  
+  const now = new Date();
+  const gracePeriodEnd = new Date(eventDate);
+  gracePeriodEnd.setHours(gracePeriodEnd.getHours() + GRACE_PERIOD_HOURS);
+  
+  if (now > gracePeriodEnd) {
+    return { 
+      active: false, 
+      message: `Event ended on ${eventDate.toLocaleDateString()}. Check-in period has expired.` 
+    };
+  }
+  
+  return { active: true };
+}
+
+// ============================================
+// POST: Check-in
+// ============================================
+
 export async function POST(request: Request) {
   try {
+    // 1. AUTHENTICATION
     const session = await getServerSession(authOptions);
-
-    if (!session || !session.user) {
+    if (!session?.user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized - Please login" },
         { status: 401 }
@@ -21,8 +72,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // 2. PARSE REQUEST
     const body = await request.json();
     const { eventId, qrCode, email, ticketNumber, ticketId } = body;
+
+    console.log("📥 [CHECKIN] Request:", { 
+      eventId, 
+      qrCode: qrCode?.substring(0, 50) + "...", 
+      email, 
+      ticketNumber, 
+      ticketId 
+    });
 
     if (!eventId) {
       return NextResponse.json({
@@ -31,37 +91,33 @@ export async function POST(request: Request) {
       });
     }
 
-    let ticket = null;
+    // ============================================
+    // STEP 1: FIND TICKET (eventId MUST match)
+    // ============================================
 
-    // ============================================
-    // 1. FIND TICKET - Multiple methods
-    // ============================================
+    let ticket = null;
 
     // Method 1: QR Code Scan
     if (qrCode) {
-      // Clean the QR data - trim whitespace and control characters
       const cleanQrCode = qrCode.trim().replace(/[\x00-\x1F\x7F]/g, '');
-      
-      // Try to parse as JSON first (if we encoded full data)
       let qrHash = cleanQrCode;
+      let parsedData: any = null;
+
       try {
-        const parsed = JSON.parse(cleanQrCode);
-        // If it's JSON, extract the hash or ticket ID
-        qrHash = parsed.hash || parsed.qrCodeHash || parsed.ticketId || cleanQrCode;
-        console.log("📋 Parsed QR JSON:", parsed);
+        parsedData = JSON.parse(cleanQrCode);
+        console.log("📋 [CHECKIN] Parsed QR:", JSON.stringify(parsedData, null, 2));
+        qrHash = parsedData.hash || parsedData.qrCodeHash || parsedData.ticketId || cleanQrCode;
       } catch {
-        // Not JSON, use as is
+        console.log("📋 [CHECKIN] QR is not JSON, using as is");
         qrHash = cleanQrCode;
       }
 
-      console.log("🔍 Looking for ticket with QR hash:", qrHash.substring(0, 20) + "...");
+      console.log("🔍 [CHECKIN] Searching with:", { qrHash, eventId });
 
+      // ✅ PRIMARY: Search by qrCodeHash + eventId
       ticket = await prisma.ticketBooking.findFirst({
         where: {
-          OR: [
-            { qrCodeHash: qrHash },
-            { id: qrHash }, // In case QR contains ticket ID
-          ],
+          qrCodeHash: qrHash,
           eventId: eventId,
         },
         include: {
@@ -70,9 +126,42 @@ export async function POST(request: Request) {
           event: true,
         },
       });
+
+      // ✅ FALLBACK 1: Search by ticketId + eventId
+      if (!ticket && parsedData?.ticketId) {
+        ticket = await prisma.ticketBooking.findFirst({
+          where: {
+            id: parsedData.ticketId,
+            eventId: eventId,
+          },
+          include: {
+            user: true,
+            tier: true,
+            event: true,
+          },
+        });
+      }
+
+      // ✅ FALLBACK 2: Case-insensitive hash + eventId
+      if (!ticket) {
+        ticket = await prisma.ticketBooking.findFirst({
+          where: {
+            OR: [
+              { qrCodeHash: qrHash.toLowerCase() },
+              { qrCodeHash: qrHash.toUpperCase() },
+            ],
+            eventId: eventId,
+          },
+          include: {
+            user: true,
+            tier: true,
+            event: true,
+          },
+        });
+      }
     }
     
-    // Method 2: Check-in by Ticket Number
+    // Method 2: Ticket Number + eventId
     else if (ticketNumber) {
       ticket = await prisma.ticketBooking.findFirst({
         where: {
@@ -87,10 +176,13 @@ export async function POST(request: Request) {
       });
     }
     
-    // Method 3: Check-in by Ticket ID
+    // Method 3: Ticket ID + eventId
     else if (ticketId) {
-      ticket = await prisma.ticketBooking.findUnique({
-        where: { id: ticketId },
+      ticket = await prisma.ticketBooking.findFirst({
+        where: {
+          id: ticketId,
+          eventId: eventId,
+        },
         include: {
           user: true,
           tier: true,
@@ -99,8 +191,8 @@ export async function POST(request: Request) {
       });
     }
     
-    // Method 4: Manual check-in by Email
-    else if (email && !ticketNumber) {
+    // Method 4: Email
+    else if (email) {
       const user = await prisma.user.findUnique({
         where: { email: email },
       });
@@ -112,16 +204,18 @@ export async function POST(request: Request) {
         });
       }
       
-      // Find all unchecked tickets for this user/event
       const uncheckedTickets = await prisma.ticketBooking.findMany({
         where: {
           userId: user.id,
           eventId: eventId,
           checkedIn: false,
+          // ✅ FIX: Convert readonly array to mutable array
+          paymentStatus: { in: [...ALLOWED_PAYMENT_STATUSES] },
         },
         include: {
           user: true,
           tier: true,
+          event: true,
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -157,70 +251,77 @@ export async function POST(request: Request) {
     }
 
     // ============================================
-    // 2. TICKET VALIDATION
+    // STEP 2: TICKET NOT FOUND FOR THIS EVENT
     // ============================================
 
     if (!ticket) {
+      console.log(`❌ [CHECKIN] No ticket found for event: ${eventId}`);
       return NextResponse.json({
         success: false,
-        message: "❌ Ticket not found for this event",
+        message: "❌ Ticket not found for this event. Please verify the QR code or ticket number.",
       });
     }
 
-    // ✅ NEW: Check payment status
-    if (ticket.paymentStatus !== "COMPLETED") {
-      const statusMap = {
-        "PENDING": "payment is pending",
-        "HELD_IN_ESCROW": "payment is held in escrow",
-        "PROCESSING_PAYOUT": "payment is being processed",
-        "FAILED": "payment failed",
-        "REFUNDED": "ticket has been refunded",
-        "DISPUTED": "ticket is under dispute",
-      };
-      
-      const statusMessage = statusMap[ticket.paymentStatus as keyof typeof statusMap] || ticket.paymentStatus;
-      
+    // ============================================
+    // STEP 3: VERIFY EVENT MATCH (EXPLICIT CHECK)
+    // ============================================
+
+    if (ticket.eventId !== eventId) {
+      console.log(`❌ [CHECKIN] Event mismatch: ticket.eventId=${ticket.eventId}, selectedEventId=${eventId}`);
+      console.log(`   Ticket belongs to: "${ticket.event?.title}"`);
       return NextResponse.json({
         success: false,
-        message: `❌ Cannot check in: ${statusMessage}. Please contact support.`,
+        message: `❌ This ticket belongs to "${ticket.event?.title}". Please select the correct event.`,
+        ticketEventId: ticket.eventId,
+        selectedEventId: eventId,
+        ticketEventTitle: ticket.event?.title,
+      });
+    }
+
+    console.log(`✅ [CHECKIN] Ticket found: ${ticket.ticketNumber}`, {
+      eventId: ticket.eventId,
+      eventTitle: ticket.event?.title,
+      checkedIn: ticket.checkedIn,
+      paymentStatus: ticket.paymentStatus,
+    });
+
+    // ============================================
+    // STEP 4: CHECK PAYMENT STATUS
+    // ============================================
+
+    if (!isValidPaymentStatus(ticket.paymentStatus)) {
+      return NextResponse.json({
+        success: false,
+        message: `❌ Cannot check in: ${getPaymentStatusMessage(ticket.paymentStatus)}. Please contact support.`,
         paymentStatus: ticket.paymentStatus,
       });
     }
 
-    // ✅ NEW: Check if event is completed
-    if (ticket.event.isCompleted) {
+    // ============================================
+    // STEP 5: CHECK EVENT ACTIVE
+    // ============================================
+
+    const eventStatus = isEventActive(new Date(ticket.event.eventDate), ticket.event.isCompleted);
+    if (!eventStatus.active) {
       return NextResponse.json({
         success: false,
-        message: `❌ Event "${ticket.event.title}" has already ended. Cannot check in.`,
-        eventCompleted: true,
-        completedAt: ticket.event.completedAt,
+        message: `❌ ${eventStatus.message}`,
+        eventCompleted: ticket.event.isCompleted,
       });
     }
 
-    // ✅ NEW: Check if event date has passed (with optional grace period)
-    const eventDate = new Date(ticket.event.eventDate);
-    const now = new Date();
-    // Allow check-in up to 24 hours after event ends (configurable)
-    const gracePeriodHours = 24;
-    const gracePeriodEnd = new Date(eventDate);
-    gracePeriodEnd.setHours(gracePeriodEnd.getHours() + gracePeriodHours);
-    
-    if (now > gracePeriodEnd) {
-      return NextResponse.json({
-        success: false,
-        message: `❌ Event ended on ${eventDate.toLocaleDateString()}. Check-in period has expired.`,
-        eventEnded: true,
-      });
-    }
+    // ============================================
+    // STEP 6: CHECK IF ALREADY CHECKED IN
+    // ============================================
 
-    // Check if already checked in
     if (ticket.checkedIn) {
       const remainingTickets = await prisma.ticketBooking.count({
         where: {
           userId: ticket.userId,
           eventId: ticket.eventId,
           checkedIn: false,
-          paymentStatus: "COMPLETED",
+          // ✅ FIX: Convert readonly array to mutable array
+          paymentStatus: { in: [...ALLOWED_PAYMENT_STATUSES] },
         },
       });
       
@@ -241,14 +342,13 @@ export async function POST(request: Request) {
     }
 
     // ============================================
-    // 3. MARK AS CHECKED IN (ATOMIC - Prevents Race Conditions)
+    // STEP 7: ATOMIC CHECK-IN
     // ============================================
 
-    // ✅ FIXED: Atomic update - only update if not already checked in
     const updatedTicket = await prisma.ticketBooking.updateMany({
       where: {
         id: ticket.id,
-        checkedIn: false, // Only update if not checked in
+        checkedIn: false,
       },
       data: {
         checkedIn: true,
@@ -256,17 +356,18 @@ export async function POST(request: Request) {
       },
     });
 
-    // Check if update was successful (prevents race condition)
     if (updatedTicket.count === 0) {
-      // Someone else checked it in at the same time
       return NextResponse.json({
         success: false,
-        message: "⚠️ This ticket was just checked in by another scanner. Please try again.",
+        message: "⚠️ This ticket was just checked in by another scanner. Please refresh and try again.",
         alreadyCheckedIn: true,
       });
     }
 
-    // Get the updated ticket with fresh data
+    // ============================================
+    // STEP 8: GET UPDATED TICKET & REMAINING COUNT
+    // ============================================
+
     const finalTicket = await prisma.ticketBooking.findUnique({
       where: { id: ticket.id },
       include: {
@@ -276,20 +377,22 @@ export async function POST(request: Request) {
       },
     });
 
-    // Count remaining tickets for this user
     const remainingTickets = await prisma.ticketBooking.count({
       where: {
         userId: ticket.userId,
         eventId: ticket.eventId,
         checkedIn: false,
-        paymentStatus: "COMPLETED",
+        // ✅ FIX: Convert readonly array to mutable array
+        paymentStatus: { in: [...ALLOWED_PAYMENT_STATUSES] },
       },
     });
 
-    // Log successful check-in for audit
     console.log(`✅ Checked in: ${ticket.user.name} (${ticket.ticketNumber}) for event: ${ticket.event.title}`);
 
-    // Return success response
+    // ============================================
+    // STEP 9: SUCCESS RESPONSE
+    // ============================================
+
     return NextResponse.json({
       success: true,
       message: `✅ Checked in: ${ticket.user.name} (${ticket.tier.name})`,
@@ -315,12 +418,15 @@ export async function POST(request: Request) {
   }
 }
 
-// GET endpoint - Fetch tickets by email (for manual check-in)
+// ============================================
+// GET: Fetch tickets by email
+// ============================================
+
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     
-    if (!session || !session.user || session.user.role !== "ORGANIZER") {
+    if (!session?.user || session.user.role !== "ORGANIZER") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -345,10 +451,12 @@ export async function GET(request: Request) {
         userId: user.id,
         eventId: eventId,
         checkedIn: false,
-        paymentStatus: "COMPLETED", // ✅ Only show paid tickets
+        // ✅ FIX: Convert readonly array to mutable array
+        paymentStatus: { in: [...ALLOWED_PAYMENT_STATUSES] },
       },
       include: {
         tier: true,
+        event: true,
         user: {
           select: {
             name: true,

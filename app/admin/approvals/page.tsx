@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -48,7 +49,8 @@ interface Organizer {
   createdAt: string;
 }
 
-export default function ApprovalsPage() {
+// ✅ Component that uses useSearchParams()
+function ApprovalsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -601,5 +603,21 @@ export default function ApprovalsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ✅ Main export with Suspense boundary
+export default function ApprovalsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-2 text-sm text-gray-500">Loading approvals...</p>
+        </div>
+      </div>
+    }>
+      <ApprovalsContent />
+    </Suspense>
   );
 }

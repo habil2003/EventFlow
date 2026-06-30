@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// ✅ ADD THIS GET ENDPOINT
+// GET endpoint
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -37,7 +37,10 @@ export async function GET(
 
     // Calculate totals
     const totalTicketsSold = event.ticketTiers.reduce((sum, tier) => sum + tier.soldCount, 0);
-    const totalRevenue = event.ticketTiers.reduce((sum, tier) => sum + (tier.soldCount * tier.price), 0);
+    
+    // ✅ FIX 1: Convert Decimal to number for multiplication
+    const totalRevenue = event.ticketTiers.reduce((sum, tier) => 
+      sum + (Number(tier.soldCount) * Number(tier.price)), 0);
 
     return NextResponse.json({
       ...event,
@@ -87,7 +90,7 @@ export async function PUT(
       },
     });
 
-    // ✅ Get existing tiers to preserve sold counts
+    // Get existing tiers to preserve sold counts
     const existingTiers = await prisma.ticketTier.findMany({
       where: { eventId: id },
     });
@@ -98,7 +101,7 @@ export async function PUT(
       soldCountMap.set(tier.name, tier.soldCount);
     });
 
-    // ✅ Update or create tiers without deleting
+    // Update or create tiers without deleting
     for (const tier of ticketTiers) {
       const existingTier = existingTiers.find(t => t.name === tier.name);
       
@@ -110,7 +113,6 @@ export async function PUT(
             name: tier.name,
             price: tier.price,
             quantity: tier.quantity,
-            // ✅ Keep the existing soldCount, don't reset to 0
             soldCount: existingTier.soldCount,
           },
         });
@@ -128,9 +130,9 @@ export async function PUT(
       }
     }
 
-    // ✅ Delete tiers that were removed in the edit
-    const newTierNames = new Set(ticketTiers.map(t => t.name));
-    const tiersToDelete = existingTiers.filter(t => !newTierNames.has(t.name));
+    // ✅ FIX 2: Add type annotation for the map parameter
+    const newTierNames = new Set(ticketTiers.map((t: { name: string }) => t.name));
+    const tiersToDelete = existingTiers.filter((t: { name: string }) => !newTierNames.has(t.name));
     
     for (const tier of tiersToDelete) {
       // Only delete if no tickets sold
@@ -150,7 +152,7 @@ export async function PUT(
   }
 }
 
-// Your existing DELETE endpoint
+// DELETE endpoint
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

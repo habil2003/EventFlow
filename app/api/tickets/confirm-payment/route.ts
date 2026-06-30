@@ -25,14 +25,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Payment intent not found" }, { status: 404 });
     }
 
-    // Initiate Khalti payment
+    // ✅ FIX 1: Convert Decimal to number
+    // ✅ FIX 2: Handle null/undefined for customer email
     const khaltiResult = await initiateKhaltiPayment({
-      amount: paymentTransaction.amount,
+      amount: Number(paymentTransaction.amount),
       transactionId: paymentTransaction.transactionId,
       returnUrl: returnUrl || `${process.env.NEXT_PUBLIC_APP_URL}/tickets/payment-callback`,
       productName: "Event Tickets",
       customerName: session.user.name || "Customer",
-      customerEmail: session.user.email,
+      customerEmail: session.user.email || '', // ✅ FIX: Provide fallback empty string
     });
 
     if (khaltiResult.success && khaltiResult.payment_url) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -27,16 +27,14 @@ import {
   InformationCircleIcon
 } from "@heroicons/react/24/outline";
 
-// AddOn interface with pricingType
 interface AddOn {
   id: string;
   name: string;
   extraPrice: number;
   isOptional: boolean;
-  pricingType?: string; // "fixed" or "per_person"
+  pricingType?: string;
 }
 
-// Package interface with new fields
 interface Package {
   id: string;
   name: string;
@@ -44,7 +42,7 @@ interface Package {
   description: string;
   imageUrl: string | null;
   galleryImages: string[];
-  pricingType?: string; // "fixed" or "per_person"
+  pricingType?: string;
   minGuests?: number;
   maxGuests?: number;
   addOns: AddOn[];
@@ -62,13 +60,13 @@ interface Vendor {
   packages: Package[];
 }
 
-export default function VendorDetailPage() {
+// ✅ Component that uses useSearchParams()
+function VendorDetailContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
 
-  // Get existing event params from URL (when coming from "Add Vendor")
   const existingEventId = searchParams.get("eventId");
   const existingEventTitle = searchParams.get("eventTitle");
   const existingEventDate = searchParams.get("eventDate");
@@ -91,7 +89,6 @@ export default function VendorDetailPage() {
   const [selectedPackageImages, setSelectedPackageImages] = useState<string[]>([]);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
 
-  // Theme management
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
@@ -108,7 +105,6 @@ export default function VendorDetailPage() {
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
 
-  // Get vendor ID from params
   useEffect(() => {
     const getId = async () => {
       const resolvedParams = await params;
@@ -117,13 +113,11 @@ export default function VendorDetailPage() {
     getId();
   }, [params]);
 
-  // Pre-fill form with existing event data when coming from "Add Vendor"
   useEffect(() => {
     if (existingEventTitle) {
       setEventTitle(decodeURIComponent(existingEventTitle));
     }
     if (existingEventDate) {
-      // Convert to YYYY-MM-DD format for date input
       let formattedDate = existingEventDate;
       if (formattedDate.includes('T')) {
         formattedDate = formattedDate.split('T')[0];
@@ -139,7 +133,6 @@ export default function VendorDetailPage() {
     }
   }, [existingEventTitle, existingEventDate, existingGuestCount]);
 
-  // Fetch vendor data
   useEffect(() => {
     if (!vendorId) return;
 
@@ -151,7 +144,6 @@ export default function VendorDetailPage() {
         setVendor(data);
         if (data.packages?.length > 0) {
           setSelectedPackage(data.packages[0].id);
-          // Set images for the first package
           const firstPkg = data.packages[0];
           const images = [];
           if (firstPkg.imageUrl) images.push(firstPkg.imageUrl);
@@ -168,7 +160,6 @@ export default function VendorDetailPage() {
     fetchVendor();
   }, [vendorId]);
 
-  // Update images when selected package changes
   useEffect(() => {
     if (vendor && selectedPackage) {
       const pkg = vendor.packages.find(p => p.id === selectedPackage);
@@ -182,14 +173,12 @@ export default function VendorDetailPage() {
     }
   }, [selectedPackage, vendor]);
 
-  // Apply guest count from URL AFTER packages are loaded and validated
   useEffect(() => {
     if (packagesLoaded && selectedPackage && existingGuestCount) {
       const selectedPkg = vendor?.packages.find(p => p.id === selectedPackage);
       if (selectedPkg) {
         let guestCountNum = parseInt(existingGuestCount);
         if (!isNaN(guestCountNum) && guestCountNum > 0) {
-          // Apply min/max constraints based on selected package
           const minGuests = selectedPkg.minGuests || 1;
           const maxGuests = selectedPkg.maxGuests || 10000;
           let validCount = guestCountNum;
@@ -210,34 +199,26 @@ export default function VendorDetailPage() {
     );
   };
 
-  // ========== GUEST COUNT HANDLERS WITH PROPER TYPING BEHAVIOR ==========
-
-  // Handle input change - NO validation during typing
   const handleGuestCountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
 
-    // Allow empty string while typing
     if (rawValue === "") {
       setGuestCountInput("");
       return;
     }
 
-    // Only allow numbers
     if (/^\d+$/.test(rawValue)) {
       setGuestCountInput(rawValue);
     }
   };
 
-  // Handle blur - apply validation here
   const handleGuestCountBlur = () => {
     let numValue = parseInt(guestCountInput);
 
-    // If empty or invalid, set to min
     if (isNaN(numValue)) {
       numValue = selectedPkg?.minGuests || 1;
     }
 
-    // Apply min/max constraints
     if (selectedPkg) {
       const minGuests = selectedPkg.minGuests || 1;
       const maxGuests = selectedPkg.maxGuests || 10000;
@@ -245,14 +226,12 @@ export default function VendorDetailPage() {
       if (numValue > maxGuests) numValue = maxGuests;
     }
 
-    // Ensure minimum of 1
     if (numValue < 1) numValue = 1;
 
     setGuestCount(numValue);
     setGuestCountInput(numValue.toString());
   };
 
-  // Increment guest count
   const incrementGuestCount = () => {
     const maxGuests = selectedPkg?.maxGuests || 10000;
     const newValue = Math.min(guestCount + 10, maxGuests);
@@ -260,7 +239,6 @@ export default function VendorDetailPage() {
     setGuestCountInput(newValue.toString());
   };
 
-  // Decrement guest count
   const decrementGuestCount = () => {
     const minGuests = selectedPkg?.minGuests || 1;
     const newValue = Math.max(guestCount - 10, minGuests);
@@ -268,23 +246,17 @@ export default function VendorDetailPage() {
     setGuestCountInput(newValue.toString());
   };
 
-  // ========== END GUEST COUNT HANDLERS ==========
-
-  // Calculate totals based on pricing type
   const selectedPkg = vendor?.packages.find(p => p.id === selectedPackage);
 
-  // Convert to numbers explicitly
   const packagePrice = Number(selectedPkg?.price) || 0;
   const guestCountNum = Number(guestCount) || 1;
   const isPerPerson = selectedPkg?.pricingType === "per_person";
 
-  // Calculate base price based on pricing type
   let basePriceDisplay = packagePrice;
   if (isPerPerson) {
     basePriceDisplay = packagePrice * guestCountNum;
   }
 
-  // Calculate add-ons total
   const addOnsTotal = selectedAddOns.reduce((total, addOnId) => {
     const addOn = selectedPkg?.addOns.find(a => a.id === addOnId);
     if (addOn) {
@@ -297,11 +269,9 @@ export default function VendorDetailPage() {
     return total;
   }, 0);
 
-  // Calculate final totals
   const totalAmount = basePriceDisplay + addOnsTotal;
   const depositAmount = totalAmount * 0.2;
 
-  // Check if guest count is valid
   const isGuestCountValid = () => {
     if (!selectedPkg) return true;
     const minGuests = selectedPkg.minGuests || 1;
@@ -416,7 +386,21 @@ export default function VendorDetailPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
 
-      {/* Main Content */}
+      {/* Theme Toggle Button */}
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          aria-label="Toggle theme"
+        >
+          {theme === "light" ? (
+            <MoonIcon className="h-5 w-5 text-gray-600" />
+          ) : (
+            <SunIcon className="h-5 w-5 text-yellow-400" />
+          )}
+        </button>
+      </div>
+
       <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
 
         <motion.div
@@ -425,7 +409,6 @@ export default function VendorDetailPage() {
           variants={fadeUp}
           className="space-y-6"
         >
-          {/* Back Button */}
           <Link
             href={`/marketplace?eventId=${existingEventId || ''}&eventTitle=${encodeURIComponent(existingEventTitle || '')}&eventDate=${existingEventDate || ''}&guestCount=${existingGuestCount || ''}`}
             className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -434,7 +417,6 @@ export default function VendorDetailPage() {
             Back to Marketplace
           </Link>
 
-          {/* Vendor Header with Profile Image */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="relative w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
               {vendor.imageUrl ? (
@@ -479,7 +461,6 @@ export default function VendorDetailPage() {
             </div>
           </div>
 
-          {/* Package Selection with pricing type display */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Select Package</h2>
 
@@ -508,7 +489,6 @@ export default function VendorDetailPage() {
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{pkg.name}</h3>
                           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{pkg.description}</p>
-                          {/* Pricing type badge */}
                           {pkg.pricingType === "per_person" ? (
                             <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                               <UserGroupIcon className="h-3 w-3" />
@@ -520,7 +500,6 @@ export default function VendorDetailPage() {
                               Fixed Price
                             </span>
                           )}
-                          {/* Guest limits */}
                           {(pkg.minGuests || pkg.maxGuests) && (
                             <p className="text-xs text-gray-400 mt-1">
                               {pkg.minGuests && pkg.maxGuests && `${pkg.minGuests} - ${pkg.maxGuests} guests`}
@@ -548,7 +527,6 @@ export default function VendorDetailPage() {
             </div>
           </div>
 
-          {/* Package Gallery */}
           {selectedPkg && selectedPackageImages.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Package Gallery</h2>
@@ -575,7 +553,6 @@ export default function VendorDetailPage() {
             </div>
           )}
 
-          {/* Add-Ons with per-person pricing display */}
           {selectedPkg && selectedPkg.addOns.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Add-Ons</h2>
@@ -622,7 +599,6 @@ export default function VendorDetailPage() {
             </div>
           )}
 
-          {/* Event Details with improved Guest Count Input */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Event Details</h2>
 
@@ -653,7 +629,6 @@ export default function VendorDetailPage() {
                 />
               </div>
 
-              {/* Guest Count - Fixed typing behavior */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Expected Guest Count
@@ -665,7 +640,6 @@ export default function VendorDetailPage() {
                 </label>
 
                 <div className="flex items-center gap-3">
-                  {/* Decrease Button */}
                   <button
                     type="button"
                     onClick={decrementGuestCount}
@@ -675,7 +649,6 @@ export default function VendorDetailPage() {
                     <MinusIcon className="h-4 w-4 mx-auto" />
                   </button>
 
-                  {/* Direct Input Field - NO validation during typing */}
                   <input
                     type="text"
                     inputMode="numeric"
@@ -685,7 +658,6 @@ export default function VendorDetailPage() {
                     className="w-28 text-center px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
 
-                  {/* Increase Button */}
                   <button
                     type="button"
                     onClick={incrementGuestCount}
@@ -696,21 +668,18 @@ export default function VendorDetailPage() {
                   </button>
                 </div>
 
-                {/* Show valid range */}
                 {(selectedPkg?.minGuests || selectedPkg?.maxGuests) && (
                   <p className="text-xs text-gray-400 mt-2">
                     Valid range: {selectedPkg?.minGuests || 1} - {selectedPkg?.maxGuests || "unlimited"} guests
                   </p>
                 )}
 
-                {/* Info message for fixed price packages */}
                 {!isPerPerson && (
                   <p className="text-xs text-gray-400 mt-2">
                     ℹ️ Guest count is for planning only. Price is fixed regardless of number of guests.
                   </p>
                 )}
 
-                {/* Guest limit warnings */}
                 {selectedPkg?.minGuests && guestCount < selectedPkg.minGuests && (
                   <p className="text-xs text-red-500 mt-1">
                     ❌ Minimum {selectedPkg.minGuests} guests required for this package
@@ -723,7 +692,6 @@ export default function VendorDetailPage() {
                 )}
               </div>
 
-              {/* Show that data was pre-filled from existing event */}
               {existingEventTitle && existingEventDate && existingGuestCount && (
                 <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
@@ -735,13 +703,11 @@ export default function VendorDetailPage() {
             </div>
           </div>
 
-          {/* Price Summary & Booking */}
           {selectedPkg && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Price Summary</h2>
 
               <div className="space-y-2 mb-4">
-                {/* Package Price Row */}
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">{selectedPkg.name} Package</span>
                   <div className="text-right">
@@ -764,7 +730,6 @@ export default function VendorDetailPage() {
                   </div>
                 </div>
 
-                {/* Add-ons Rows */}
                 {selectedAddOns.map(addOnId => {
                   const addOn = selectedPkg.addOns.find(a => a.id === addOnId);
                   if (!addOn) return null;
@@ -784,7 +749,6 @@ export default function VendorDetailPage() {
                   );
                 })}
 
-                {/* Total Amount */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
                   <div className="flex justify-between font-bold">
                     <span>Total Amount</span>
@@ -824,7 +788,6 @@ export default function VendorDetailPage() {
         </motion.div>
       </main>
 
-      {/* Gallery Modal */}
       {showGalleryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setShowGalleryModal(false)}>
           <div className="relative max-w-5xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
@@ -869,5 +832,21 @@ export default function VendorDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ✅ Main export with Suspense boundary
+export default function VendorDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-2 text-sm text-gray-500">Loading vendor details...</p>
+        </div>
+      </div>
+    }>
+      <VendorDetailContent />
+    </Suspense>
   );
 }

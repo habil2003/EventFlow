@@ -7,10 +7,11 @@ const nextConfig: NextConfig = {
     '192.168.1.*',
     '192.168.100.*',
     '*.local',
-    '*.ngrok.io', // ✅ Added ngrok support
+    '*.ngrok.io',
+    '*.ngrok-free.app',
   ],
   
-  // ✅ Fix: Use remotePatterns instead of deprecated domains
+  // ✅ Images configuration
   images: {
     remotePatterns: [
       {
@@ -24,30 +25,48 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: '*.ngrok.io', // ✅ For HTTPS tunneling
+        hostname: '*.ngrok.io',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.ngrok-free.app',
+      },
+      {
+        protocol: 'http',
+        hostname: '*.ngrok.io',
+      },
+      {
+        protocol: 'http',
+        hostname: '*.ngrok-free.app',
       },
     ],
   },
   
-  // ✅ REMOVED: The 'server' key is not valid in next.config.ts
-  // HTTPS is handled differently in Next.js 16+
+  // ✅ Removed output: 'standalone' - using default
+  // output: 'standalone', // Commented out
   
-  // ✅ Keep this
-  output: 'standalone',
-  
-  // ✅ Add this for better development experience
+  // ✅ Experimental features
   experimental: {
-    // Enable faster refresh
     optimizePackageImports: ['@heroicons/react', 'framer-motion'],
   },
   
-  // ✅ Add this to handle CORS during development
+  // ✅ Headers for camera access, security, and ngrok warning skip
   async headers() {
     return [
       {
-        // Allow camera access from any origin during development
         source: '/(.*)',
         headers: [
+          // ✅ Skip ngrok browser warning page
+          {
+            key: 'ngrok-skip-browser-warning',
+            value: 'true',
+          },
+          // Allow camera access
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(self), microphone=(self), geolocation=(self)',
+          },
+          // CORS headers
           {
             key: 'Cross-Origin-Embedder-Policy',
             value: 'require-corp',
@@ -55,6 +74,23 @@ const nextConfig: NextConfig = {
           {
             key: 'Cross-Origin-Opener-Policy',
             value: 'same-origin',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin',
+          },
+          // Allow ngrok origins
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, PUT, DELETE, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type, Authorization',
           },
         ],
       },

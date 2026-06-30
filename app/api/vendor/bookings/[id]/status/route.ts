@@ -182,14 +182,14 @@ export async function PATCH(
 
       // Process refund via Khalti
       const refundResult = await processKhaltiRefund(
-        depositTransaction.gatewayTransactionId,
+        depositTransaction.gatewayTransactionId || '',
         refundAmount,
       );
 
       console.log("📦 Refund result:", JSON.stringify(refundResult, null, 2));
 
       // Determine refund status
-      let refundStatus: 'PROCESSED' | 'PENDING_ADMIN' | 'FAILED' = "PENDING";
+      let refundStatus: 'PROCESSED' | 'PENDING_ADMIN' | 'FAILED' = 'PENDING_ADMIN';
       let refundMessage = "";
 
       if (refundResult.success) {
@@ -251,7 +251,7 @@ export async function PATCH(
           booking.vendor.businessName,
           booking.user.email,
           refundAmount,
-          depositTransaction.gatewayTransactionId
+          depositTransaction.gatewayTransactionId || ''
         );
       }
 

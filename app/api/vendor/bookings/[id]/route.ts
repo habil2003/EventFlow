@@ -75,7 +75,8 @@ export async function PATCH(
         await prisma.refund.create({
           data: {
             originalTransactionId: depositTransaction.transactionId,
-            refundAmount: booking.depositAmount || booking.totalAmount * 0.2,
+            // ✅ FIX: Convert Decimal to number
+            refundAmount: booking.depositAmount || Number(booking.totalAmount) * 0.2,
             refundReason: 'Vendor declined booking',
             refundStatus: 'PROCESSED',
             paymentTransactionId: depositTransaction.id,

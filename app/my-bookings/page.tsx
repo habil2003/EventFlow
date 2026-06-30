@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -49,7 +49,6 @@ interface VendorBooking {
   location: string;
   createdAt: string;
   declineReason?: string;
-  // ✅ Refund & cancellation fields
   refundStatus?: string | null;
   refundAmount?: number | null;
   cancelledBy?: string | null;
@@ -87,7 +86,8 @@ const SERVICE_TYPES = [
 const BOOKING_STATUSES = ["PENDING", "ACCEPTED", "DECLINED", "COMPLETED"];
 const PAYMENT_STATUSES = ["PENDING", "DEPOSIT_PAID", "FULLY_PAID"];
 
-export default function MyBookingsPage() {
+// ✅ Component that uses useSearchParams()
+function BookingsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -142,7 +142,6 @@ export default function MyBookingsPage() {
     fetchData();
   }, []);
 
-  // ✅ Cancel with refund — for PENDING+deposit or ACCEPTED+deposit
   const handleCancelBooking = async (bookingId: string) => {
     const reason = prompt(
       "Reason for cancellation (optional):\n\nRefund policy:\n≥7 days before event: 100%\n3–6 days: 50%\n<3 days: No refund"
@@ -175,7 +174,6 @@ export default function MyBookingsPage() {
     }
   };
 
-  // ✅ Cancel without refund — PENDING + no deposit paid
   const cancelBookingNoDeposit = async (bookingId: string) => {
     if (!confirm("Are you sure you want to cancel this booking? This action cannot be undone.")) return;
     try {
@@ -326,7 +324,6 @@ export default function MyBookingsPage() {
 
   const activeFilterCount = getActiveFilterCount();
 
-  // ✅ SIMPLIFIED Refund status block - just shows status, links to refunds page for details
   const RefundStatusBlock = ({ booking }: { booking: VendorBooking }) => {
     if (!booking.refundStatus) {
       return null;
@@ -374,7 +371,6 @@ export default function MyBookingsPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
 
-        {/* Header with Refunds Link */}
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Bookings</h1>
@@ -391,7 +387,6 @@ export default function MyBookingsPage() {
           </Link>
         </div>
 
-        {/* Payment Success */}
         {paymentSuccess === "success" && (
           <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
             <div className="flex items-center gap-3">
@@ -403,7 +398,6 @@ export default function MyBookingsPage() {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex gap-2">
             {(["upcoming", "past", "events"] as const).map((view) => (
@@ -453,7 +447,6 @@ export default function MyBookingsPage() {
           )}
         </div>
 
-        {/* Filter Panel */}
         <AnimatePresence>
           {showFilters && activeView !== "events" && (
             <motion.div
@@ -532,7 +525,6 @@ export default function MyBookingsPage() {
           )}
         </AnimatePresence>
 
-        {/* Active Filter Tags */}
         {activeFilterCount > 0 && activeView !== "events" && (
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-xs text-gray-500 dark:text-gray-400">Active filters:</span>
@@ -546,7 +538,7 @@ export default function MyBookingsPage() {
           </div>
         )}
 
-        {/* ── UPCOMING VIEW ─────────────────────────────────────── */}
+        {/* Upcoming View */}
         {activeView === "upcoming" && (
           <>
             {upcomingBookings.length === 0 ? (
@@ -618,7 +610,6 @@ export default function MyBookingsPage() {
                               <span className="ml-1 text-sm font-medium text-gray-900 dark:text-white">{booking.eventTitle}</span>
                             </div>
 
-                            {/* Payment summary */}
                             <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                               <div className="flex flex-wrap items-center gap-4 text-sm">
                                 <div>
@@ -661,7 +652,6 @@ export default function MyBookingsPage() {
                               </div>
                             )}
 
-                            {/* ✅ Declined / cancelled block with simplified refund status */}
                             {booking.bookingStatus === "DECLINED" && (
                               <div className="mt-3 p-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
                                 {booking.cancelledBy === "CUSTOMER" && (
@@ -691,7 +681,6 @@ export default function MyBookingsPage() {
                             )}
                           </div>
 
-                          {/* Action buttons */}
                           <div className="flex flex-col gap-2 min-w-[160px]">
                             <Link href={`/bookings/${booking.id}?returnTo=${activeView}`} className="flex items-center justify-center px-3 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-sm font-medium transition-colors">
                               <EyeIcon className="h-4 w-4 mr-1" />View Details
@@ -704,14 +693,12 @@ export default function MyBookingsPage() {
                               <PaymentButton amount={remainingAmount} bookingId={booking.id} paymentType="VENDOR_REMAINING" gateway="khalti" returnUrl={`/my-bookings?tab=${activeView}`} buttonText={`Pay Remaining (NPR ${remainingAmount.toLocaleString()})`} onSuccess={() => window.location.reload()} />
                             )}
 
-                            {/* ✅ Cancel without refund */}
                             {canCancelNoDeposit && (
                               <button onClick={() => cancelBookingNoDeposit(booking.id)} className="flex items-center justify-center px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 text-sm font-medium transition-colors">
                                 <XCircleIcon className="h-4 w-4 mr-1" />Cancel Booking
                               </button>
                             )}
 
-                            {/* ✅ Cancel with refund — PENDING+deposit or ACCEPTED+deposit */}
                             {canCancelWithDeposit && (
                               <button onClick={() => handleCancelBooking(booking.id)} disabled={cancellingId === booking.id} className="flex items-center justify-center px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50 transition-colors">
                                 {cancellingId === booking.id ? (
@@ -729,7 +716,6 @@ export default function MyBookingsPage() {
                 })}
               </div>
             ) : (
-              // Grid view
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {upcomingBookings.map((booking) => {
                   const bookingStatus = getBookingStatusBadge(booking.bookingStatus);
@@ -782,7 +768,7 @@ export default function MyBookingsPage() {
           </>
         )}
 
-        {/* ── PAST VIEW ─────────────────────────────────────────── */}
+        {/* Past View */}
         {activeView === "past" && (
           <>
             {pastBookings.length === 0 ? (
@@ -870,7 +856,7 @@ export default function MyBookingsPage() {
           </>
         )}
 
-        {/* ── EVENTS VIEW ───────────────────────────────────────── */}
+        {/* Events View */}
         {activeView === "events" && (
           <>
             {umbrellaEvents.length === 0 ? (
@@ -928,5 +914,23 @@ export default function MyBookingsPage() {
 
       </main>
     </div>
+  );
+}
+
+// ✅ Main export with Suspense boundary
+export default function MyBookingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+            Loading your bookings...
+          </p>
+        </div>
+      </div>
+    }>
+      <BookingsContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -45,7 +45,8 @@ interface Vendor {
   packages: Package[];
 }
 
-export default function VendorBookingPage() {
+// ✅ Component that uses useSearchParams()
+function VendorBookingContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,7 +74,6 @@ export default function VendorBookingPage() {
   const [booking, setBooking] = useState(false);
   const [vendorId, setVendorId] = useState<string | null>(null);
   
-  // Payment states
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [depositAmount, setDepositAmount] = useState(0);
@@ -211,13 +211,11 @@ export default function VendorBookingPage() {
   const guestCountNum = Number(guestCount) || minGuestsAllowed;
   const isPerPerson = selectedPkg?.pricingType === "per_person";
 
-  // Calculate price with multi-day discount
   let basePriceDisplay = packagePrice;
   if (isPerPerson) {
     basePriceDisplay = packagePrice * guestCountNum;
   }
   
-  // Apply multi-day discount
   let discountPercentValue = 0;
   if (totalDays >= 8) discountPercentValue = 15;
   else if (totalDays >= 4) discountPercentValue = 10;
@@ -225,8 +223,6 @@ export default function VendorBookingPage() {
   
   const multiDayDiscountAmount = (basePriceDisplay * discountPercentValue) / 100;
   let priceAfterDiscount = basePriceDisplay - multiDayDiscountAmount;
-  
-  // Apply for multiple days
   priceAfterDiscount = priceAfterDiscount * totalDays;
 
   const addOnsTotal = selectedAddOns.reduce((total, addOnId) => {
@@ -353,7 +349,22 @@ export default function VendorBookingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
+      {/* Theme Toggle Button */}
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          aria-label="Toggle theme"
+        >
+          {theme === "light" ? (
+            <MoonIcon className="h-5 w-5 text-gray-600" />
+          ) : (
+            <SunIcon className="h-5 w-5 text-yellow-400" />
+          )}
+        </button>
+      </div>
+
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="mb-6">
           <Link
@@ -365,7 +376,6 @@ export default function VendorBookingPage() {
           </Link>
         </div>
 
-        {/* Booking Form */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
           <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
             <h1 className="text-xl font-bold text-white">Complete Your Booking</h1>
@@ -373,7 +383,6 @@ export default function VendorBookingPage() {
           </div>
           
           <div className="p-6">
-            {/* Package Summary Card */}
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-6">
               <div className="flex justify-between items-center">
                 <div>
@@ -389,7 +398,6 @@ export default function VendorBookingPage() {
               </div>
             </div>
 
-            {/* Add-Ons Section */}
             {selectedPkg.addOns.length > 0 && (
               <div className="mb-6">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Add-Ons</h3>
@@ -412,7 +420,6 @@ export default function VendorBookingPage() {
               </div>
             )}
 
-            {/* Event Details Form */}
             <div className="space-y-4 mb-6">
               <h3 className="font-semibold text-gray-900 dark:text-white">Event Details</h3>
               <div>
@@ -488,7 +495,6 @@ export default function VendorBookingPage() {
               </div>
             </div>
 
-            {/* Price Summary */}
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-6">
               <div className="flex justify-between mb-2">
                 <span className="text-gray-600 dark:text-gray-300">{selectedPkg.name} Package (per day)</span>
@@ -539,7 +545,6 @@ export default function VendorBookingPage() {
               </div>
             </div>
 
-            {/* Booking Button or Payment Button */}
             {!showPayment ? (
               <button
                 onClick={handleBooking}
@@ -572,5 +577,21 @@ export default function VendorBookingPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// ✅ Main export with Suspense boundary
+export default function VendorBookingPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-2 text-sm text-gray-500">Loading booking details...</p>
+        </div>
+      </div>
+    }>
+      <VendorBookingContent />
+    </Suspense>
   );
 }

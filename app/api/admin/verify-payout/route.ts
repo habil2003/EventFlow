@@ -100,7 +100,10 @@ ${notes ? `Admin notes: ${notes}` : ''}`,
         select: { remainingAmount: true }
       });
       
-      const isRemainingZero = vendorBooking?.remainingAmount === 0;
+      // ✅ FIX: Properly check if remainingAmount is zero
+      const isRemainingZero = vendorBooking?.remainingAmount !== null && 
+                              vendorBooking?.remainingAmount !== undefined && 
+                              Number(vendorBooking.remainingAmount) === 0;
       
       if (payout.type === 'REMAINING' || (payout.type === 'DEPOSIT' && isRemainingZero)) {
         // Fully paid and fully released

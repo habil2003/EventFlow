@@ -704,7 +704,11 @@ export default function AdminEscrowPage() {
                                                     {/* Verify Payout Button */}
                                                     {isProcessingPayout && booking.hasPendingPayout && booking.pendingPayouts?.[0] && (
                                                         <button
-                                                            onClick={() => openVerifyModal(booking.pendingPayouts[0])}
+                                                            onClick={() => {
+  if (booking.pendingPayouts && booking.pendingPayouts.length > 0) {
+    openVerifyModal(booking.pendingPayouts[0]);
+  }
+}}
                                                             className="px-3 py-1.5 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
                                                         >
                                                             <CheckCircleIcon className="h-4 w-4 inline mr-1" />

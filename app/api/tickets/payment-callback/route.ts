@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     // Find the payment transaction using YOUR transaction ID (purchase_order_id)
     const paymentTransaction = await prisma.paymentTransaction.findFirst({
       where: {
-        transactionId: purchaseOrderId,  // ✅ This matches your TKT_xxx format
+        transactionId: purchaseOrderId || '',  // ✅ FIX: Handle null
         paymentType: "TICKET_PURCHASE",
       },
     });

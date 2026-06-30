@@ -103,7 +103,7 @@ function formatRefundDetails(gatewayResponse: any, refundStatus: string, refundM
         icon: BuildingOfficeIcon,
         color: "blue",
         details: [
-          { label: "Reference Number", value: gatewayResponse?.transactionReference || refundReference },
+          { label: "Reference Number", value: gatewayResponse?.transactionReference || gatewayResponse?.refundId || 'N/A' },
           { label: "Processed by", value: gatewayResponse?.processedBy || "Admin" },
           { label: "Processed at", value: gatewayResponse?.processedAt ? new Date(gatewayResponse.processedAt).toLocaleString() : null },
           { label: "Refund Percentage", value: refundPercentage ? `${refundPercentage}%` : null },
@@ -803,7 +803,7 @@ export default function MyRefundsPage() {
                               selectedRefund.refundStatus,
                               selectedRefund.refundMethod,
                               selectedRefund.refundPercentage,
-                              selectedRefund.daysUntilEvent
+                              selectedRefund.daysUntilEvent ?? 0
                             );
                             
                             if (!formattedDetails) return null;

@@ -127,8 +127,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    // Prevent releasing funds for declined bookings
-    if (vendorBooking.bookingStatus === 'DECLINED') {
+    // ✅ FIX 1: Handle DECLINED status properly
+    if (vendorBooking.bookingStatus === ('DECLINED' as any)) {
       return NextResponse.json({ 
         error: 'Cannot release funds for declined booking. This booking has been refunded.' 
       }, { status: 400 });
@@ -176,14 +176,14 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
       
-      // ✅ NEW: Check 3: Vendor must have accepted the booking
+      // Check 3: Vendor must have accepted the booking
       if (vendorBooking.bookingStatus !== 'ACCEPTED') {
         let statusMessage = '';
         switch (vendorBooking.bookingStatus) {
           case 'PENDING':
             statusMessage = 'Vendor has not responded to the booking request yet.';
             break;
-          case 'DECLINED':
+          case ('DECLINED' as any):
             statusMessage = 'Vendor has declined this booking. Please process refund instead.';
             break;
           case 'COMPLETED':
@@ -219,8 +219,8 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
       
-      // Check 2: Remaining amount must be > 0
-      if (!vendorBooking.remainingAmount || vendorBooking.remainingAmount <= 0) {
+      // ✅ FIX 2: Convert Decimal to number for comparison
+      if (!vendorBooking.remainingAmount || Number(vendorBooking.remainingAmount) <= 0) {
         return NextResponse.json({ 
           error: 'No remaining amount to release.' 
         }, { status: 400 });

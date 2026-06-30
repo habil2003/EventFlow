@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -50,7 +50,6 @@ interface BookingDetail {
   depositPaidAt?: string;
   remainingPaidAt?: string;
   amountReleasedAt?: string;
-  // ✅ Cancellation & refund fields
   cancelledBy?: string;
   cancellationReason?: string;
   cancelledAt?: string;
@@ -59,7 +58,8 @@ interface BookingDetail {
   refundPercentage?: number | null;
 }
 
-export default function BookingDetailPage() {
+// ✅ Component that uses useSearchParams()
+function BookingDetailContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -205,7 +205,7 @@ export default function BookingDetailPage() {
     const reason = prompt(
       "Reason for cancellation (optional):\n\nRefund policy:\n≥7 days before event: 100% refund\n3–6 days before event: 50% refund\n<3 days before event: No refund"
     );
-    if (reason === null) return; // user dismissed prompt
+    if (reason === null) return;
 
     if (
       !confirm(
@@ -331,7 +331,6 @@ export default function BookingDetailPage() {
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="space-y-6">
 
-          {/* Back Button */}
           <Link
             href={backUrl}
             className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -340,7 +339,6 @@ export default function BookingDetailPage() {
             {backText}
           </Link>
 
-          {/* Booking Header */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-6">
               <div className="flex items-center justify-between flex-wrap gap-4">
@@ -373,7 +371,6 @@ export default function BookingDetailPage() {
 
             <div className="p-6 space-y-6">
 
-              {/* Event Info */}
               <div>
                 <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
                   Event
@@ -383,7 +380,6 @@ export default function BookingDetailPage() {
                 </p>
               </div>
 
-              {/* Date & Location */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -434,7 +430,6 @@ export default function BookingDetailPage() {
                 </div>
               </div>
 
-              {/* Package Details */}
               <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                 <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
                   Package
@@ -464,7 +459,6 @@ export default function BookingDetailPage() {
                 )}
               </div>
 
-              {/* Payment Summary */}
               <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                 <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
                   Payment Summary
@@ -611,7 +605,6 @@ export default function BookingDetailPage() {
                 </p>
               </div>
 
-              {/* Payment Buttons */}
               {canPayDeposit() && (
                 <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                   <PaymentButton
@@ -639,7 +632,6 @@ export default function BookingDetailPage() {
                 </div>
               )}
 
-              {/* ✅ Cancel without refund — PENDING + no deposit */}
               {canCancelWithoutRefund() && (
                 <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                   <button
@@ -652,7 +644,6 @@ export default function BookingDetailPage() {
                 </div>
               )}
 
-              {/* ✅ Cancel with refund — ACCEPTED + deposit paid */}
               {canCancelWithRefund() && (
                 <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                   <button
@@ -670,7 +661,6 @@ export default function BookingDetailPage() {
                 </div>
               )}
 
-              {/* ✅ Cancellation & Refund Status Section */}
               {(booking.bookingStatus === "DECLINED" ||
                 booking.refundStatus) && (
                 <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
@@ -679,7 +669,6 @@ export default function BookingDetailPage() {
                   </h2>
                   <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-3">
 
-                    {/* Who cancelled */}
                     {booking.cancelledBy === "CUSTOMER" && (
                       <div className="flex items-center gap-2">
                         <XCircleIcon className="h-4 w-4 text-orange-500 flex-shrink-0" />
@@ -724,7 +713,6 @@ export default function BookingDetailPage() {
                       </p>
                     )}
 
-                    {/* Refund amount breakdown */}
                     {booking.refundStatus &&
                       booking.refundAmount != null && (
                         <div className="border-t border-gray-200 dark:border-gray-600 pt-3 space-y-2">
@@ -749,7 +737,6 @@ export default function BookingDetailPage() {
                         </div>
                       )}
 
-                    {/* Refund status badge */}
                     {booking.refundStatus === "PENDING_ADMIN" && (
                       <div className="flex items-start gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
                         <ClockIcon className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -803,7 +790,6 @@ export default function BookingDetailPage() {
                 </div>
               )}
 
-              {/* Booking Information */}
               <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                 <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
                   Booking Information
@@ -825,5 +811,21 @@ export default function BookingDetailPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// ✅ Main export with Suspense boundary
+export default function BookingDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-2 text-sm text-gray-500">Loading booking details...</p>
+        </div>
+      </div>
+    }>
+      <BookingDetailContent />
+    </Suspense>
   );
 }

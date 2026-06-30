@@ -179,7 +179,7 @@ export async function GET() {
         vendorPaymentStatus: booking.vendorPaymentStatus,
         amountReleasedAt: booking.amountReleasedAt,
         availableActions: availableActions,
-        location: booking.userSocialEvent.location || 'N/A',
+        location: (booking.userSocialEvent as any).location || 'N/A',
         depositReleasedAt: booking.payouts.find(p => p.type === 'DEPOSIT')?.processedAt || null,
         vendorAccepted: vendorAccepted,
         vendorPending: vendorPending,

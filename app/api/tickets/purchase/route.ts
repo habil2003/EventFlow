@@ -52,7 +52,7 @@ function generateTransactionId(): string {
   return `TKT_${timestamp}_${random}`;
 }
 
-// ✅ NEW: Prepare QR payload data
+// Prepare QR payload data
 function prepareQRPayload(ticketId: string, eventId: string, userId: string, hash: string): string {
   const payload = {
     ticketId: ticketId,
@@ -60,13 +60,12 @@ function prepareQRPayload(ticketId: string, eventId: string, userId: string, has
     userId: userId,
     hash: hash,
     timestamp: new Date().toISOString(),
-    // Simple signature for tamper detection
     signature: generateSimpleSignature(ticketId, eventId, userId, hash)
   };
   return JSON.stringify(payload);
 }
 
-// ✅ NEW: Generate simple signature
+// Generate simple signature
 function generateSimpleSignature(ticketId: string, eventId: string, userId: string, hash: string): string {
   const data = `${ticketId}|${eventId}|${userId}|${hash}`;
   let signature = 0;
@@ -120,7 +119,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ NEW: Check if event is completed
     if (event.isCompleted) {
       return NextResponse.json(
         { error: "This event has already ended" },
@@ -128,7 +126,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ NEW: Check if event date has passed
     const eventDate = new Date(event.eventDate);
     if (eventDate < new Date()) {
       return NextResponse.json(
@@ -160,7 +157,7 @@ export async function POST(request: Request) {
     
     const transactionId = generateTransactionId();
 
-    // ✅ Use a database transaction to ensure atomicity
+    // Use a database transaction to ensure atomicity
     const result = await prisma.$transaction(async (prisma) => {
       // Create payment transaction record (PENDING)
       const paymentTransaction = await prisma.paymentTransaction.create({
@@ -188,7 +185,7 @@ export async function POST(request: Request) {
         const ticketNumber = await generateTicketNumber(eventId);
         const qrCodeHash = await generateUniqueQRHash();
         
-        // ✅ Generate QR payload with all needed data
+        // Generate QR payload with all needed data
         const qrPayload = prepareQRPayload(
           `temp_${Date.now()}_${i}`, // Temporary ID, will be replaced
           eventId,
@@ -237,7 +234,7 @@ export async function POST(request: Request) {
     console.log(`✅ Created ${qty} ticket(s) for user ${session.user.email} for event ${event.title}`);
     console.log(`📋 Ticket numbers: ${result.ticketNumbers.join(', ')}`);
 
-    // Return payment initiation data with complete ticket info
+    // ✅ FIX: Handle null qrCodeHash
     return NextResponse.json({
       success: true,
       requiresPayment: true,
@@ -247,13 +244,12 @@ export async function POST(request: Request) {
       tickets: result.createdTickets.map(t => ({
         id: t.id,
         ticketNumber: t.ticketNumber,
-        qrCodeHash: t.qrCodeHash,
-        // ✅ Include QR payload for immediate display
+        qrCodeHash: t.qrCodeHash || '',  // ✅ FIXED
         qrPayload: prepareQRPayload(
           t.id,
           eventId,
           session.user.id,
-          t.qrCodeHash
+          t.qrCodeHash || ''  // ✅ FIXED
         ),
       })),
       message: `Tickets created! Please complete payment to activate.`,
