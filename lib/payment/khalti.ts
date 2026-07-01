@@ -4,6 +4,7 @@ interface InitiatePaymentParams {
   amount: number;
   transactionId: string;
   returnUrl: string;
+  websiteUrl?: string;
   productName: string;
   customerName: string;
   customerEmail: string;
@@ -30,10 +31,19 @@ export async function initiateKhaltiPayment(params: InitiatePaymentParams): Prom
   try {
     const amountInPaisa = params.amount * 100;
     
+    // ✅ Use provided websiteUrl or extract from returnUrl
+    const websiteUrl = params.websiteUrl || new URL(params.returnUrl).origin;
+    
     const isSandbox = process.env.KHALTI_ENVIRONMENT === 'sandbox';
     const apiUrl = isSandbox 
       ? 'https://dev.khalti.com/api/v2/epayment/initiate/'
       : 'https://khalti.com/api/v2/epayment/initiate/';
+
+    console.log('🔗 [khalti] Return URL:', params.returnUrl);
+    console.log('🔗 [khalti] Website URL:', websiteUrl);
+    console.log('🔗 [khalti] Amount (paisa):', amountInPaisa);
+    console.log('🔗 [khalti] Transaction ID:', params.transactionId);
+    console.log('🔗 [khalti] Product:', params.productName);
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -43,7 +53,7 @@ export async function initiateKhaltiPayment(params: InitiatePaymentParams): Prom
       },
       body: JSON.stringify({
         return_url: params.returnUrl,
-        website_url: process.env.NEXT_PUBLIC_APP_URL,
+        website_url: websiteUrl,
         amount: amountInPaisa,
         purchase_order_id: params.transactionId,
         purchase_order_name: params.productName,
@@ -56,6 +66,8 @@ export async function initiateKhaltiPayment(params: InitiatePaymentParams): Prom
 
     const data: KhaltiResponse = await response.json();
     
+    console.log('📡 [khalti] Khalti Response:', data);
+    
     if (response.ok && data.pidx) {
       return {
         success: true,
@@ -65,11 +77,11 @@ export async function initiateKhaltiPayment(params: InitiatePaymentParams): Prom
     } else {
       return {
         success: false,
-        error: data.detail || 'Payment initiation failed',
+        error: data.detail || data.error || 'Payment initiation failed',
       };
     }
   } catch (error) {
-    console.error('Khalti payment initiation error:', error);
+    console.error('❌ [khalti] Payment initiation error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -92,6 +104,8 @@ export async function verifyKhaltiPayment(pidx: string): Promise<{
       ? 'https://dev.khalti.com/api/v2/epayment/lookup/'
       : 'https://khalti.com/api/v2/epayment/lookup/';
 
+    console.log('🔗 [khalti] Verifying payment:', pidx);
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -102,6 +116,8 @@ export async function verifyKhaltiPayment(pidx: string): Promise<{
     });
 
     const data = await response.json();
+    
+    console.log('📡 [khalti] Verification response:', data);
     
     if (response.ok) {
       return {
@@ -116,7 +132,7 @@ export async function verifyKhaltiPayment(pidx: string): Promise<{
       };
     }
   } catch (error) {
-    console.error('Khalti verification error:', error);
+    console.error('❌ [khalti] Verification error:', error);
     return { success: false };
   }
 }

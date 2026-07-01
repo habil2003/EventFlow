@@ -1,9 +1,8 @@
 // app/api/payment/verify/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAppUrl } from '@/lib/app-url';
 
-// Khalti fee percentage from env, defaults to 0 (test environment)
-// Set KHALTI_FEE_PERCENT=2 (or your actual rate) in production
 const KHALTI_FEE_PERCENT = Number(process.env.KHALTI_FEE_PERCENT || '0');
 
 function calculateKhaltiFee(amount: number): number {
@@ -20,7 +19,9 @@ export async function GET(request: NextRequest) {
       searchParams.get('transaction_id') || searchParams.get('tidx');
     const returnUrlParam = searchParams.get('returnUrl');
 
-    console.log('Payment verification:', {
+    console.log('📡 [payment-verify] Request received');
+    console.log('📍 [payment-verify] Request URL:', request.url);
+    console.log('📊 [payment-verify] Params:', {
       gateway,
       transactionId,
       status,
@@ -28,36 +29,80 @@ export async function GET(request: NextRequest) {
       returnUrlParam,
     });
 
+    // ✅ AUTO-DETECT: Get dynamic app URL
+    const appUrl = getAppUrl(request);
+    console.log('📍 [payment-verify] Auto-detected App URL:', appUrl);
+
+    // ✅ Validate transactionId
     if (!transactionId) {
+      console.error('❌ [payment-verify] Missing transactionId');
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/payment/failed`,
+        `${appUrl}/payment/failed?error=Missing%20transaction%20ID`
       );
     }
 
+    // ✅ Find the transaction
     const transaction = await prisma.paymentTransaction.findUnique({
       where: { transactionId },
+      include: {
+        vendorBooking: {
+          include: {
+            vendor: true,
+            user: true,
+          },
+        },
+        ticketBooking: {
+          include: {
+            event: true,
+            tier: true,
+          },
+        },
+      },
     });
 
     if (!transaction) {
-      console.error('Transaction not found:', transactionId);
+      console.error('❌ [payment-verify] Transaction not found:', transactionId);
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/payment/failed`,
+        `${appUrl}/payment/failed?error=Transaction%20not%20found`
+      );
+    }
+
+    console.log('✅ [payment-verify] Transaction found:', transaction.id);
+    console.log('📍 [payment-verify] Current status:', transaction.status);
+
+    // ✅ Get the original return URL from the transaction
+    const gatewayResponse = transaction.gatewayResponse as any;
+    const originalReturnUrl = gatewayResponse?.returnUrl || `${appUrl}/my-bookings`;
+
+    console.log('📍 [payment-verify] Original return URL:', originalReturnUrl);
+
+    // ✅ Check if already processed
+    if (transaction.status === 'SUCCESS') {
+      console.log('✅ [payment-verify] Transaction already processed:', transactionId);
+      return NextResponse.redirect(
+        `${originalReturnUrl}?payment=already_processed`
       );
     }
 
     if (status === 'Completed') {
-      console.log('Payment successful for transaction:', transactionId);
+      console.log('✅ [payment-verify] Payment successful for transaction:', transactionId);
 
       const paidAmount = Number(transaction.amount);
       const khaltiFee = calculateKhaltiFee(paidAmount);
 
-      // Update payment transaction — store gateway ID and fee
+      // ✅ Update payment transaction
       await prisma.paymentTransaction.update({
         where: { id: transaction.id },
         data: {
           status: 'SUCCESS',
           gatewayTransactionId: gatewayTransactionId,
           khaltiFee: khaltiFee,
+          gatewayResponse: { 
+            status, 
+            gateway, 
+            gatewayTransactionId,
+            returnUrl: returnUrlParam,
+          },
         },
       });
 
@@ -85,7 +130,7 @@ export async function GET(request: NextRequest) {
               paymentStatus: 'HELD_IN_ESCROW',
             },
           });
-          console.log('✅ Vendor booking updated to DEPOSIT_PAID');
+          console.log('✅ [payment-verify] Vendor booking updated to DEPOSIT_PAID');
         }
       }
 
@@ -103,50 +148,69 @@ export async function GET(request: NextRequest) {
             paymentStatus: 'HELD_IN_ESCROW',
           },
         });
-        console.log('✅ Vendor booking updated to FULLY_PAID');
+        console.log('✅ [payment-verify] Vendor booking updated to FULLY_PAID');
       }
 
       // ── TICKET PURCHASE ─────────────────────────────────────────
       else if (transaction.paymentType === 'TICKET_PURCHASE') {
-        // Find the ticket booking linked via paymentIntentId
         const ticketBooking = await prisma.ticketBooking.findFirst({
           where: { paymentIntentId: transaction.id },
+          include: {
+            event: true,
+            tier: true,
+          },
         });
 
         if (ticketBooking) {
           await prisma.ticketBooking.update({
             where: { id: ticketBooking.id },
-            data: { paymentStatus: 'HELD_IN_ESCROW' },
+            data: { 
+              paymentStatus: 'HELD_IN_ESCROW',
+            },
           });
 
-          // ✅ FIX: Link ticketBookingId back onto the transaction
-          // so admin refund queries can find it
           await prisma.paymentTransaction.update({
             where: { id: transaction.id },
             data: { ticketBookingId: ticketBooking.id },
           });
 
-          console.log('✅ Ticket booking updated to HELD_IN_ESCROW, transaction linked');
+          console.log('✅ [payment-verify] Ticket booking updated to HELD_IN_ESCROW, transaction linked');
         }
       }
 
+      // ✅ Redirect to the original return URL with success
+      console.log('🔗 [payment-verify] Redirecting to:', `${originalReturnUrl}?payment=success`);
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/payment/success`,
+        `${originalReturnUrl}?payment=success`
       );
     } else {
-      console.log('Payment failed for transaction:', transactionId);
+      console.log('❌ [payment-verify] Payment failed for transaction:', transactionId);
+      
       await prisma.paymentTransaction.update({
         where: { id: transaction.id },
-        data: { status: 'FAILED' },
+        data: { 
+          status: 'FAILED',
+          gatewayResponse: { status, gateway, gatewayTransactionId, error: 'Payment failed' },
+        },
       });
+
+      if (transaction.paymentType === 'TICKET_PURCHASE') {
+        const deleted = await prisma.ticketBooking.deleteMany({
+          where: { paymentIntentId: transaction.id },
+        });
+        console.log(`🗑️ [payment-verify] Deleted ${deleted.count} pending tickets`);
+      }
+
+      // ✅ Redirect to the original return URL with error
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/payment/failed`,
+        `${originalReturnUrl}?payment=failed`
       );
     }
   } catch (error) {
-    console.error('Payment verification error:', error);
+    console.error('❌ [payment-verify] Error:', error);
+    const appUrl = getAppUrl(request);
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/payment/failed`,
+      `${appUrl}/payment/failed?error=Server%20error`
     );
   }
 }

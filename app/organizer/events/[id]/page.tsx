@@ -5,8 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useTheme } from "@/components/ThemeProvider";
-import { 
+import {
   ArrowLeftIcon,
   CalendarIcon,
   MapPinIcon,
@@ -16,12 +15,10 @@ import {
   ChartBarIcon,
   QrCodeIcon,
   PencilIcon,
-  EyeIcon,
-  MoonIcon,
-  SunIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClipboardDocumentListIcon
+  ClipboardDocumentListIcon,
+  ShoppingCartIcon,
 } from "@heroicons/react/24/outline";
 
 interface Event {
@@ -35,6 +32,8 @@ interface Event {
   capacity: number;
   totalTicketsSold: number;
   totalRevenue: number;
+  isCompleted?: boolean;
+  isActive?: boolean;
   ticketTiers: {
     id: string;
     name: string;
@@ -52,18 +51,16 @@ interface RecentBooking {
   totalAmount: number;
   createdAt: string;
   checkedIn: boolean;
-  quantity?: number; // ✅ ADDED: Make quantity optional
+  quantity?: number;
 }
 
 export default function OrganizerEventDetailPage({ params }: { params: { id: string } }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
-  
-  // ✅ FIX 1: Cast params to the correct type
+
   const unwrappedParams = React.use(params as any) as { id: string };
   const eventId = unwrappedParams.id;
-  
+
   const [event, setEvent] = useState<Event | null>(null);
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +83,6 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
 
     const fetchData = async () => {
       try {
-        // Fetch event details
         const eventRes = await fetch(`/api/organizer/events/${eventId}`);
         if (eventRes.ok) {
           const data = await eventRes.json();
@@ -95,7 +91,6 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
           console.error("Failed to fetch event:", eventRes.status);
         }
 
-        // Fetch recent bookings
         const bookingsRes = await fetch(`/api/organizer/events/${eventId}/bookings`);
         if (bookingsRes.ok) {
           const data = await bookingsRes.json();
@@ -140,22 +135,18 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
     );
   }
 
+  const isCompleted = event.isCompleted === true;
+  const isPast = new Date(event.eventDate) < new Date();
   const soldPercentage = event.capacity > 0 ? (event.totalTicketsSold / event.capacity) * 100 : 0;
-  // ✅ FIX 2: Handle quantity properly with fallback
   const checkedInCount = recentBookings
     .filter(b => b.checkedIn)
     .reduce((sum, b) => sum + (b.quantity || 1), 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      
-      {/* Navigation */}
-      
 
-      {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        
-        {/* Back Button */}
+
         <Link
           href="/organizer/events"
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 mb-6 group"
@@ -169,6 +160,12 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{event.title}</h1>
+              {isCompleted && (
+                <span className="inline-flex items-center mt-2 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  <CheckCircleIcon className="h-3 w-3 mr-1" />
+                  Completed
+                </span>
+              )}
               <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400">
                 <div className="flex items-center">
                   <CalendarIcon className="h-4 w-4 mr-1 text-indigo-500" />
@@ -180,21 +177,34 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
                 </div>
               </div>
             </div>
-            
-            <div className="flex gap-3">
+
+            {/* ✅ Header Actions - One place for My Tickets */}
+            <div className="flex flex-wrap gap-3">
               <Link
-                href={`/organizer/events/${event.id}/edit`}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                href="/events"
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
               >
-                <PencilIcon className="h-4 w-4 mr-2" />
-                Edit
+                <ShoppingCartIcon className="h-4 w-4 mr-2" />
+                Buy Tickets
               </Link>
+
+              {!isCompleted && (
+                <Link
+                  href={`/organizer/events/${event.id}/edit`}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <PencilIcon className="h-4 w-4 mr-2" />
+                  Edit
+                </Link>
+              )}
+
+              {/* ✅ My Tickets - Only here */}
               <Link
-                href={`/events/${event.id}`}
-                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
+                href="/my-tickets"
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
               >
-                <EyeIcon className="h-4 w-4 mr-2" />
-                Public View
+                <TicketIcon className="h-4 w-4 mr-2" />
+                My Tickets
               </Link>
             </div>
           </div>
@@ -211,7 +221,7 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
               <TicketIcon className="h-8 w-8 text-indigo-500 opacity-50" />
             </div>
           </div>
-          
+
           <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
@@ -221,7 +231,7 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
               <CurrencyRupeeIcon className="h-8 w-8 text-green-500 opacity-50" />
             </div>
           </div>
-          
+
           <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
@@ -232,14 +242,14 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
             </div>
             <div className="mt-2">
               <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-purple-500 rounded-full transition-all"
                   style={{ width: `${event.totalTicketsSold > 0 ? (checkedInCount / event.totalTicketsSold) * 100 : 0}%` }}
                 />
               </div>
             </div>
           </div>
-          
+
           <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-100 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
@@ -250,7 +260,7 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
             </div>
             <div className="mt-2">
               <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-amber-500 rounded-full transition-all"
                   style={{ width: `${soldPercentage}%` }}
                 />
@@ -263,21 +273,19 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
         <div className="flex gap-2 mb-6 border-b border-gray-200 dark:border-gray-700">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === "overview"
+            className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === "overview"
                 ? "text-indigo-600 border-b-2 border-indigo-600"
                 : "text-gray-500 hover:text-gray-700"
-            }`}
+              }`}
           >
             Overview
           </button>
           <button
             onClick={() => setActiveTab("attendees")}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === "attendees"
+            className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === "attendees"
                 ? "text-indigo-600 border-b-2 border-indigo-600"
                 : "text-gray-500 hover:text-gray-700"
-            }`}
+              }`}
           >
             Recent Attendees
           </button>
@@ -308,7 +316,7 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
                           </span>
                         </div>
                         <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
                             style={{ width: `${tierSoldPercentage}%` }}
                           />
@@ -325,17 +333,21 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
               <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
                 <div className="space-y-3">
-                  <Link
-                    href={`/organizer/checkin?eventId=${event.id}`}
-                    className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <QrCodeIcon className="h-5 w-5 text-green-600" />
-                      <span className="text-sm font-medium text-green-700 dark:text-green-300">Check-in Attendees</span>
-                    </div>
-                    <ArrowLeftIcon className="h-4 w-4 text-green-600 rotate-180" />
-                  </Link>
                   
+                  {/* ❌ Check-in - Hide if completed */}
+                  {!isCompleted && (
+                    <Link
+                      href={`/organizer/checkin?eventId=${event.id}`}
+                      className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <QrCodeIcon className="h-5 w-5 text-green-600" />
+                        <span className="text-sm font-medium text-green-700 dark:text-green-300">Check-in Attendees</span>
+                      </div>
+                      <ArrowLeftIcon className="h-4 w-4 text-green-600 rotate-180" />
+                    </Link>
+                  )}
+
                   <Link
                     href={`/organizer/events/${event.id}/bookings`}
                     className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 transition-colors"
@@ -346,7 +358,7 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
                     </div>
                     <ArrowLeftIcon className="h-4 w-4 text-purple-600 rotate-180" />
                   </Link>
-                  
+
                   <Link
                     href={`/organizer/sales?eventId=${event.id}`}
                     className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 transition-colors"
@@ -363,7 +375,7 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
           </div>
         )}
 
-        {/* Attendees Tab */}
+        {/* Attendees Tab - Always visible */}
         {activeTab === "attendees" && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
@@ -394,11 +406,11 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
                           <p className="text-sm font-medium text-gray-900 dark:text-white">{booking.user.name}</p>
                           <p className="text-xs text-gray-500">{booking.user.email}</p>
                         </div>
-                       </td>
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{booking.tier.name}</td>
                       <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
                         NPR {booking.totalAmount.toLocaleString()}
-                       </td>
+                      </td>
                       <td className="px-6 py-4">
                         {booking.checkedIn ? (
                           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
@@ -411,10 +423,10 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
                             Pending
                           </span>
                         )}
-                       </td>
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {new Date(booking.createdAt).toLocaleDateString()}
-                       </td>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -428,22 +440,24 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
           </div>
         )}
 
-        {/* Footer Actions */}
-        <div className="mt-8 flex justify-between items-center pt-6 border-t border-gray-200 dark:border-gray-700">
+        {/* ✅ FOOTER - Clean */}
+        <div className="mt-8 flex flex-wrap justify-between items-center gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
           <Link
             href="/organizer/events"
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             ← Back to My Events
           </Link>
-          
-          <Link
-            href={`/organizer/checkin?eventId=${event.id}`}
-            className="inline-flex items-center px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <QrCodeIcon className="h-4 w-4 mr-2" />
-            Start Check-in
-          </Link>
+
+          {!isCompleted && (
+            <Link
+              href={`/organizer/checkin?eventId=${event.id}`}
+              className="inline-flex items-center px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <QrCodeIcon className="h-4 w-4 mr-2" />
+              Start Check-in
+            </Link>
+          )}
         </div>
       </main>
     </div>

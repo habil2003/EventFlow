@@ -18,8 +18,6 @@ import {
   XMarkIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  SunIcon,
-  MoonIcon
 } from "@heroicons/react/24/outline";
 
 interface AddOn {
@@ -61,9 +59,6 @@ function VendorPackagesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
-  
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [mounted, setMounted] = useState(false);
 
   const existingEventId = searchParams.get("eventId");
   const existingEventTitle = searchParams.get("eventTitle");
@@ -77,22 +72,6 @@ function VendorPackagesContent() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showModal, setShowModal] = useState(false);
 
-  // Theme management
-  useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
-    document.documentElement.classList.toggle("dark", initialTheme === "dark");
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  };
 
   useEffect(() => {
     const getId = async () => {
@@ -155,7 +134,7 @@ function VendorPackagesContent() {
     }
   };
 
-  if (!mounted || status === "loading" || loading) {
+  if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="text-center">
@@ -188,21 +167,6 @@ function VendorPackagesContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-
-      {/* Theme Toggle Button */}
-      <div className="fixed top-4 right-4 z-50">
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          aria-label="Toggle theme"
-        >
-          {theme === "light" ? (
-            <MoonIcon className="h-5 w-5 text-gray-600" />
-          ) : (
-            <SunIcon className="h-5 w-5 text-yellow-400" />
-          )}
-        </button>
-      </div>
 
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
 

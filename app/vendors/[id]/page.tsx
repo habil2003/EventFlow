@@ -9,8 +9,6 @@ import {
   MapPinIcon,
   StarIcon,
   CheckCircleIcon,
-  MoonIcon,
-  SunIcon,
   ArrowLeftIcon,
   CalendarIcon,
   UserGroupIcon,
@@ -72,8 +70,6 @@ function VendorDetailContent() {
   const existingEventDate = searchParams.get("eventDate");
   const existingGuestCount = searchParams.get("guestCount");
 
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [mounted, setMounted] = useState(false);
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<string>("");
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
@@ -88,22 +84,6 @@ function VendorDetailContent() {
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [selectedPackageImages, setSelectedPackageImages] = useState<string[]>([]);
   const [packagesLoaded, setPackagesLoaded] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
-    document.documentElement.classList.toggle("dark", initialTheme === "dark");
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  };
 
   useEffect(() => {
     const getId = async () => {
@@ -359,7 +339,7 @@ function VendorDetailContent() {
     return icons[serviceType] || "🏪";
   };
 
-  if (!mounted || status === "loading" || loading) {
+  if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="text-center">
@@ -385,21 +365,6 @@ function VendorDetailContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-
-      {/* Theme Toggle Button */}
-      <div className="fixed top-4 right-4 z-50">
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          aria-label="Toggle theme"
-        >
-          {theme === "light" ? (
-            <MoonIcon className="h-5 w-5 text-gray-600" />
-          ) : (
-            <SunIcon className="h-5 w-5 text-yellow-400" />
-          )}
-        </button>
-      </div>
 
       <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
 

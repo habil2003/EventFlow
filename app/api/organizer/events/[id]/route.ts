@@ -3,7 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// GET endpoint
+// ============================================
+// GET: Fetch event details
+// ============================================
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -20,7 +23,7 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Fetch event with ticket tiers
+    // Fetch event with ticket tiers and bookings
     const event = await prisma.ticketedEvent.findFirst({
       where: {
         id,
@@ -28,6 +31,11 @@ export async function GET(
       },
       include: {
         ticketTiers: true,
+        bookings: {
+          include: {
+            tier: true,
+          },
+        },
       },
     });
 
@@ -35,23 +43,85 @@ export async function GET(
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    // Calculate totals
-    const totalTicketsSold = event.ticketTiers.reduce((sum, tier) => sum + tier.soldCount, 0);
-    
-    // ✅ FIX 1: Convert Decimal to number for multiplication
-    const totalRevenue = event.ticketTiers.reduce((sum, tier) => 
-      sum + (Number(tier.soldCount) * Number(tier.price)), 0);
+    // ============================================
+    // ✅ FIX: Calculate from actual bookings (like Events List)
+    // ============================================
 
-    return NextResponse.json({
-      ...event,
-      totalTicketsSold,
-      totalRevenue,
+    let totalTicketsSold = 0;
+    let totalRevenue = 0;
+
+    // Calculate from actual bookings
+    event.bookings.forEach((booking) => {
+      totalTicketsSold += booking.quantity;
+      totalRevenue += typeof booking.totalAmount === 'string' 
+        ? parseFloat(booking.totalAmount) 
+        : Number(booking.totalAmount);
     });
+
+    // Also update the soldCount in tiers to match actual bookings
+    // Group bookings by tierId
+    const tierBookingCounts = new Map();
+    event.bookings.forEach((booking) => {
+      const tierId = booking.tierId;
+      tierBookingCounts.set(tierId, (tierBookingCounts.get(tierId) || 0) + booking.quantity);
+    });
+
+    // Update each tier's soldCount to match actual bookings
+    const updatedTiers = await Promise.all(
+      event.ticketTiers.map(async (tier) => {
+        const actualSold = tierBookingCounts.get(tier.id) || 0;
+        
+        // If the database has incorrect soldCount, update it
+        if (tier.soldCount !== actualSold) {
+          console.log(`📊 Fixing tier ${tier.name}: ${tier.soldCount} → ${actualSold}`);
+          await prisma.ticketTier.update({
+            where: { id: tier.id },
+            data: { soldCount: actualSold },
+          });
+        }
+        
+        return {
+          id: tier.id,
+          name: tier.name,
+          price: typeof tier.price === 'string' ? parseFloat(tier.price) : Number(tier.price),
+          quantity: tier.quantity,
+          soldCount: actualSold,
+        };
+      })
+    );
+
+    // Format response (matching Events List format)
+    const formattedEvent = {
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      imageUrl: event.imageUrl,
+      eventDate: event.eventDate,
+      eventTime: event.eventTime,
+      location: event.location,
+      capacity: event.capacity,
+      totalTicketsSold: totalTicketsSold,
+      totalRevenue: totalRevenue,
+      isActive: event.isActive ?? true,
+      isCompleted: event.isCompleted ?? false,
+      completedAt: event.completedAt,
+      createdAt: event.createdAt,
+      updatedAt: event.updatedAt,
+      ticketTiers: updatedTiers,
+    };
+
+    console.log(`📊 Event ${event.title}: Total tickets sold = ${totalTicketsSold}`);
+
+    return NextResponse.json(formattedEvent);
   } catch (error) {
     console.error("Error fetching event:", error);
     return NextResponse.json({ error: "Failed to fetch event" }, { status: 500 });
   }
 }
+
+// ============================================
+// PUT: Update event
+// ============================================
 
 export async function PUT(
   request: Request,
@@ -95,13 +165,7 @@ export async function PUT(
       where: { eventId: id },
     });
 
-    // Create a map of existing sold counts by tier name
-    const soldCountMap = new Map();
-    existingTiers.forEach(tier => {
-      soldCountMap.set(tier.name, tier.soldCount);
-    });
-
-    // Update or create tiers without deleting
+    // Update or create tiers
     for (const tier of ticketTiers) {
       const existingTier = existingTiers.find(t => t.name === tier.name);
       
@@ -130,16 +194,15 @@ export async function PUT(
       }
     }
 
-    // ✅ FIX 2: Add type annotation for the map parameter
+    // Delete tiers that were removed (only if no tickets sold)
     const newTierNames = new Set(ticketTiers.map((t: { name: string }) => t.name));
     const tiersToDelete = existingTiers.filter((t: { name: string }) => !newTierNames.has(t.name));
     
     for (const tier of tiersToDelete) {
-      // Only delete if no tickets sold
       if (tier.soldCount === 0) {
         await prisma.ticketTier.delete({ where: { id: tier.id } });
       }
-      // If tickets were sold, keep the tier but maybe mark as inactive
+      // If tickets were sold, keep the tier
     }
 
     return NextResponse.json({ 
@@ -152,7 +215,10 @@ export async function PUT(
   }
 }
 
-// DELETE endpoint
+// ============================================
+// DELETE: Delete event
+// ============================================
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

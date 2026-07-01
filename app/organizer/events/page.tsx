@@ -14,8 +14,6 @@ import {
   QrCodeIcon,
   ChartBarIcon,
   PlusIcon,
-  MoonIcon,
-  SunIcon,
   TrashIcon,
   PhotoIcon,
   ClipboardDocumentListIcon,
@@ -49,30 +47,11 @@ interface Event {
 export default function OrganizerEventsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [mounted, setMounted] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-
-  // Theme management
-  useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
-    document.documentElement.classList.toggle("dark", initialTheme === "dark");
-  }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -189,7 +168,7 @@ export default function OrganizerEventsPage() {
     }
   };
 
-  if (!mounted || status === "loading" || loading) {
+  if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="text-center">
@@ -276,6 +255,7 @@ export default function OrganizerEventsPage() {
               const formattedRevenue = event.totalRevenue.toLocaleString();
               const isEventActive = event.isActive !== false;
               const isCompleted = event.isCompleted === true;
+              const isPast = new Date(event.eventDate) < new Date();
 
               return (
                 <motion.div
@@ -376,8 +356,12 @@ export default function OrganizerEventsPage() {
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* ============================================ */}
+                    {/* ACTION BUTTONS WITH CONDITIONAL VISIBILITY */}
+                    {/* ============================================ */}
                     <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                      
+                      {/* ✅ Dashboard - Always visible */}
                       <Link
                         href={`/organizer/events/${event.id}`}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
@@ -386,7 +370,7 @@ export default function OrganizerEventsPage() {
                         Dashboard
                       </Link>
                       
-                      {/* Edit - Disabled if completed */}
+                      {/* ✅ Edit - Always visible but disabled if completed */}
                       <Link
                         href={`/organizer/events/${event.id}/edit`}
                         className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
@@ -399,6 +383,7 @@ export default function OrganizerEventsPage() {
                         Edit
                       </Link>
                       
+                      {/* ✅ Bookings - Always visible */}
                       <Link
                         href={`/organizer/events/${event.id}/bookings`}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
@@ -407,14 +392,18 @@ export default function OrganizerEventsPage() {
                         Bookings ({event.totalTicketsSold || 0})
                       </Link>
                       
-                      <Link
-                        href={`/organizer/checkin?eventId=${event.id}`}
-                        className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/30 rounded-lg transition-colors"
-                      >
-                        <QrCodeIcon className="h-4 w-4 mr-1" />
-                        Check-in
-                      </Link>
+                      {/* ❌ Check-in - Hide if completed */}
+                      {!isCompleted && (
+                        <Link
+                          href={`/organizer/checkin?eventId=${event.id}`}
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/30 rounded-lg transition-colors"
+                        >
+                          <QrCodeIcon className="h-4 w-4 mr-1" />
+                          Check-in
+                        </Link>
+                      )}
                       
+                      {/* ✅ Sales - Always visible */}
                       <Link
                         href={`/organizer/sales?eventId=${event.id}`}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
@@ -423,7 +412,7 @@ export default function OrganizerEventsPage() {
                         Sales
                       </Link>
                       
-                      {/* Deactivate - Disabled if completed */}
+                      {/* ❌ Deactivate - Hide if completed */}
                       {!isCompleted && (
                         <button
                           onClick={() => handleToggleStatus(event.id, isEventActive)}
@@ -438,7 +427,7 @@ export default function OrganizerEventsPage() {
                         </button>
                       )}
                       
-                      {/* Delete - Disabled if completed */}
+                      {/* ❌ Delete - Hide if completed */}
                       {!isCompleted && (
                         <button
                           onClick={() => setShowDeleteModal(event.id)}
@@ -450,8 +439,8 @@ export default function OrganizerEventsPage() {
                         </button>
                       )}
                       
-                      {/* Mark Completed - Only show for active, not completed events that are past */}
-                      {!isCompleted && new Date(event.eventDate) < new Date() && event.isActive !== false && (
+                      {/* ❌ Mark Completed - Hide if completed, show only for active, past events */}
+                      {!isCompleted && isPast && isEventActive && (
                         <button
                           onClick={() => handleMarkComplete(event.id)}
                           disabled={actionLoading === event.id}

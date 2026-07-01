@@ -18,6 +18,7 @@ import {
   SunIcon,
   CheckCircleIcon
 } from "@heroicons/react/24/outline";
+import { api } from "@/lib/api";
 
 const roles = [
   { value: "ORGANIZER", label: "Event Organizer", icon: "📅", color: "indigo", description: "Create and manage ticketed events" },
@@ -40,6 +41,23 @@ const businessTypes = [
   { value: "individual", label: "Individual Organizer" },
   { value: "agency", label: "Booking Agency" },
 ];
+
+interface RegisterResponse {
+  success?: boolean;
+  error?: string;
+  message?: string;
+  requiresApproval?: boolean;
+  emailSent?: boolean;
+  role?: string;
+  user?: any;
+  requiresVerification?: boolean;
+}
+
+interface ResendResponse {
+  success?: boolean;
+  error?: string;
+  message?: string;
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -70,6 +88,9 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [step, setStep] = useState(1);
+  const [requiresApproval, setRequiresApproval] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [userRole, setUserRole] = useState("");
 
   // Theme management
   useEffect(() => {
@@ -93,6 +114,7 @@ export default function SignupPage() {
     setError("");
     setLoading(true);
 
+    // Validation
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       setLoading(false);
@@ -146,23 +168,30 @@ export default function SignupPage() {
       ...(role === "VENDOR" && { businessName, serviceType, location, phone, description }),
     };
 
-    const response = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
+    try {
+      const data = await api.post<RegisterResponse>('/api/auth/register', payload);
+      
+      setRequiresApproval(data.requiresApproval || false);
+      setEmailSent(data.emailSent || false);
+      setUserRole(data.role || role);
       setSuccess(true);
-      setTimeout(() => {
-        router.push("/login");
-      }, 2000);
-    } else {
-      setError(data.error || "Registration failed");
+    } catch (err: any) {
+      setError(err.message || "Registration failed");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const handleResendVerification = async () => {
+    setLoading(true);
+    try {
+      await api.post<ResendResponse>('/api/auth/resend-verification', { email });
+      alert("Verification email resent! Please check your inbox.");
+    } catch (err: any) {
+      alert(err.message || "Failed to resend verification email.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!mounted) {
@@ -175,35 +204,75 @@ export default function SignupPage() {
     );
   }
 
+  // Success Screen
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center px-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="text-center max-w-md"
+          className="text-center max-w-md w-full"
         >
           <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
             <CheckCircleIcon className="h-10 w-10 text-green-600 dark:text-green-400" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Registration Submitted!</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Check Your Email</h2>
           <p className="mt-2 text-gray-500 dark:text-gray-400">
-            {role === "ORGANIZER" || role === "VENDOR" 
-              ? "Your account requires admin approval. You will receive an email once approved." 
-              : "Your account has been created. Redirecting to login..."}
+            We've sent a verification email to <strong className="text-gray-700 dark:text-gray-300">{email}</strong>.
           </p>
-          <div className="mt-4 h-1 w-32 mx-auto bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full animate-pulse"></div>
+          <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">
+            Please check your inbox and click the verification link to activate your account.
+          </p>
+          
+          {requiresApproval ? (
+            <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                ⏳ After email verification, your account will require admin approval before you can access {userRole.toLowerCase()} features.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                ✅ After email verification, you can immediately start browsing events and buying tickets.
+              </p>
+            </div>
+          )}
+
+          {!emailSent && (
+            <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                ⚠️ We couldn't send the email. Please check your spam folder or try resending.
+              </p>
+            </div>
+          )}
+
+          <div className="mt-6 space-y-3">
+            <Link
+              href="/login"
+              className="block w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-md transition-all"
+            >
+              Go to Login
+            </Link>
+            <button
+              onClick={handleResendVerification}
+              disabled={loading}
+              className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+            >
+              {loading ? "Sending..." : "Didn't receive the email? Click to resend"}
+            </button>
+          </div>
+          
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
+            The verification link will expire in 24 hours.
+          </p>
         </motion.div>
       </div>
     );
   }
 
-  const selectedRole = roles.find(r => r.value === role);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center px-4 py-12 transition-colors duration-300">
       
-      {/* Back Button - Icon only at top left */}
       <Link
         href="/"
         className="fixed top-6 left-6 z-50 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 shadow-sm transition-colors border border-gray-200 dark:border-gray-700"
@@ -211,7 +280,6 @@ export default function SignupPage() {
         <ArrowLeftIcon className="h-5 w-5" />
       </Link>
 
-      {/* Dark Mode Toggle - Top right */}
       <button
         onClick={toggleTheme}
         className="fixed top-6 right-6 z-50 rounded-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 shadow-sm transition-colors border border-gray-200 dark:border-gray-700"
@@ -226,7 +294,6 @@ export default function SignupPage() {
         className="w-full max-w-lg"
       >
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
-          {/* Header */}
           <div className="text-center mb-6">
             <motion.div
               initial={{ scale: 0 }}
@@ -240,7 +307,6 @@ export default function SignupPage() {
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Join EventFlow today</p>
           </div>
 
-          {/* Error Alert */}
           {error && (
             <motion.div
               initial={{ opacity: 0, x: -10 }}
@@ -252,7 +318,6 @@ export default function SignupPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Step 1: Role Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 I want to register as
@@ -281,7 +346,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Step 2: Core Information */}
             {(role === "ORGANIZER" || role === "VENDOR" || role === "USER") && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -318,7 +382,6 @@ export default function SignupPage() {
                   </div>
                 </div>
 
-                {/* Role-specific fields */}
                 {(role === "ORGANIZER" || role === "VENDOR") && (
                   <>
                     <div>
@@ -353,22 +416,20 @@ export default function SignupPage() {
                 )}
 
                 {role === "ORGANIZER" && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Business type</label>
-                      <select
-                        required
-                        value={businessType}
-                        onChange={(e) => setBusinessType(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-indigo-500 focus:bg-white dark:focus:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition-all"
-                      >
-                        <option value="">Select business type</option>
-                        {businessTypes.map((bt) => (
-                          <option key={bt.value} value={bt.value}>{bt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Business type</label>
+                    <select
+                      required
+                      value={businessType}
+                      onChange={(e) => setBusinessType(e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-indigo-500 focus:bg-white dark:focus:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition-all"
+                    >
+                      <option value="">Select business type</option>
+                      {businessTypes.map((bt) => (
+                        <option key={bt.value} value={bt.value}>{bt.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 )}
 
                 {role === "VENDOR" && (
@@ -416,7 +477,6 @@ export default function SignupPage() {
                   </>
                 )}
 
-                {/* Password fields for all */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password</label>
                   <div className="relative">
@@ -503,7 +563,5 @@ export default function SignupPage() {
         </p>
       </motion.div>
     </div>
-  );
+  )   
 }
-
-// Add missing imports

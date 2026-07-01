@@ -17,7 +17,9 @@ import {
   ArrowLeftIcon,
   CreditCardIcon,
   PhotoIcon,
-  XMarkIcon
+  XMarkIcon,
+  PencilIcon,
+  BuildingOfficeIcon,
 } from "@heroicons/react/24/outline";
 
 interface TicketTier {
@@ -38,6 +40,7 @@ interface Event {
   location: string;
   capacity: number;
   organizer: {
+    id: string;
     name: string;
     email: string;
   };
@@ -106,6 +109,13 @@ export default function EventDetailPage() {
     fetchEvent();
   }, [eventId]);
 
+  // ✅ Check if current user is the organizer of this event
+  const isOrganizer = session?.user?.id === event?.organizer?.id;
+
+  // ✅ Determine the correct back URL
+  const backUrl = isOrganizer ? "/organizer/events" : "/events";
+  const backLabel = isOrganizer ? "Back to My Events" : "Back to Events";
+
   const handlePurchase = async () => {
     if (!session) {
       router.push("/login");
@@ -151,7 +161,6 @@ export default function EventDetailPage() {
       const paymentData = await paymentResponse.json();
 
       if (paymentResponse.ok && paymentData.payment_url) {
-        // Redirect to Khalti payment page
         window.location.href = paymentData.payment_url;
       } else {
         alert(paymentData.error || "Payment initiation failed");
@@ -209,18 +218,35 @@ export default function EventDetailPage() {
           variants={fadeUp}
           className="space-y-6"
         >
-          {/* Back Button */}
-          <Link
-            href="/events"
-            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-          >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
-            Back to Events
-          </Link>
+          {/* ✅ Smart Back Button + Organizer Badge */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <Link
+              href={backUrl}
+              className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <ArrowLeftIcon className="h-4 w-4 mr-1" />
+              {backLabel}
+            </Link>
 
-          {/* Event Header with Image - FIXED: No truncation */}
+            {isOrganizer && (
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400">
+                  <PencilIcon className="h-3 w-3 mr-1" />
+                  Organizer
+                </span>
+                <Link
+                  href={`/organizer/events/${event.id}`}
+                  className="text-xs text-indigo-600 hover:underline dark:text-indigo-400 flex items-center gap-1"
+                >
+                  <BuildingOfficeIcon className="h-3 w-3" />
+                  Dashboard →
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Event Header with Image */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-            {/* Event Image - Fixed to show full image without cropping */}
             {event.imageUrl ? (
               <div className="relative w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
                 <div className="relative w-full cursor-pointer" onClick={() => setShowImageModal(true)}>
@@ -363,7 +389,7 @@ export default function EventDetailPage() {
         </motion.div>
       </main>
 
-      {/* Image Modal - Fixed with better close button */}
+      {/* Image Modal */}
       {showImageModal && event.imageUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setShowImageModal(false)}>
           <div className="relative max-w-5xl w-full mx-4" onClick={(e) => e.stopPropagation()}>

@@ -6,12 +6,10 @@ import crypto from "crypto";
 
 // Generate unique ticket number with event prefix
 async function generateTicketNumber(eventId: string): Promise<string> {
-  // Get the count of tickets for this event
   const count = await prisma.ticketBooking.count({
     where: { eventId: eventId },
   });
   
-  // Format: EVT-XXXXX-001 (event short ID + sequential number)
   const shortEventId = eventId.substring(0, 6).toUpperCase();
   const sequentialNumber = String(count + 1).padStart(4, '0');
   return `TKT-${shortEventId}-${sequentialNumber}`;
@@ -25,15 +23,11 @@ async function generateUniqueQRHash(): Promise<string> {
   const maxAttempts = 5;
   
   do {
-    // Generate a random 32-byte hex string
     hash = crypto.randomBytes(32).toString("hex");
-    
-    // Check if this hash already exists
     const existing = await prisma.ticketBooking.findFirst({
       where: { qrCodeHash: hash },
       select: { id: true }
     });
-    
     exists = !!existing;
     attempts++;
     
@@ -104,7 +98,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get event and ticket tier
     const event = await prisma.ticketedEvent.findUnique({
       where: { id: eventId },
       include: {
@@ -143,7 +136,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check availability
     const available = tier.quantity - tier.soldCount;
     if (available < qty) {
       return NextResponse.json(
@@ -157,9 +149,7 @@ export async function POST(request: Request) {
     
     const transactionId = generateTransactionId();
 
-    // Use a database transaction to ensure atomicity
     const result = await prisma.$transaction(async (prisma) => {
-      // Create payment transaction record (PENDING)
       const paymentTransaction = await prisma.paymentTransaction.create({
         data: {
           transactionId: transactionId,
@@ -177,21 +167,12 @@ export async function POST(request: Request) {
         },
       });
 
-      // Create ticket records with PENDING status
       const createdTickets = [];
       const ticketNumbers = [];
       
       for (let i = 0; i < qty; i++) {
         const ticketNumber = await generateTicketNumber(eventId);
         const qrCodeHash = await generateUniqueQRHash();
-        
-        // Generate QR payload with all needed data
-        const qrPayload = prepareQRPayload(
-          `temp_${Date.now()}_${i}`, // Temporary ID, will be replaced
-          eventId,
-          session.user.id,
-          qrCodeHash
-        );
         
         const ticket = await prisma.ticketBooking.create({
           data: {
@@ -213,15 +194,7 @@ export async function POST(request: Request) {
         ticketNumbers.push(ticketNumber);
       }
 
-      // Update sold count on tier
-      await prisma.ticketTier.update({
-        where: { id: tierId },
-        data: {
-          soldCount: {
-            increment: qty,
-          },
-        },
-      });
+      // ✅ FIX: REMOVED soldCount increment - it will be done in payment-callback
 
       return {
         paymentTransaction,
@@ -230,11 +203,9 @@ export async function POST(request: Request) {
       };
     });
 
-    // Log successful creation
     console.log(`✅ Created ${qty} ticket(s) for user ${session.user.email} for event ${event.title}`);
     console.log(`📋 Ticket numbers: ${result.ticketNumbers.join(', ')}`);
 
-    // ✅ FIX: Handle null qrCodeHash
     return NextResponse.json({
       success: true,
       requiresPayment: true,
@@ -244,12 +215,12 @@ export async function POST(request: Request) {
       tickets: result.createdTickets.map(t => ({
         id: t.id,
         ticketNumber: t.ticketNumber,
-        qrCodeHash: t.qrCodeHash || '',  // ✅ FIXED
+        qrCodeHash: t.qrCodeHash || '',
         qrPayload: prepareQRPayload(
           t.id,
           eventId,
           session.user.id,
-          t.qrCodeHash || ''  // ✅ FIXED
+          t.qrCodeHash || ''
         ),
       })),
       message: `Tickets created! Please complete payment to activate.`,

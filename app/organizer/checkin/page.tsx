@@ -18,8 +18,6 @@ import {
   ClipboardDocumentIcon,
   BeakerIcon,
   XMarkIcon,
-  MoonIcon,
-  SunIcon,
 } from "@heroicons/react/24/outline";
 
 // ============================================
@@ -32,6 +30,7 @@ interface Event {
   eventDate: string;
   eventTime: string;
   location: string;
+  isCompleted?: boolean;  // ✅ ADDED
 }
 
 interface Ticket {
@@ -86,10 +85,6 @@ function CheckinContent() {
   // STATE
   // ============================================
 
-  // Theme
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [mounted, setMounted] = useState(false);
-
   // Events
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState("");
@@ -117,26 +112,6 @@ function CheckinContent() {
   // Refs
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // ============================================
-  // THEME MANAGEMENT
-  // ============================================
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
-    document.documentElement.classList.toggle("dark", initialTheme === "dark");
-    setMounted(true);
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  }, [theme]);
 
   // ============================================
   // AUTHENTICATION
@@ -447,10 +422,18 @@ function CheckinContent() {
   ), [handleScanSuccess, handleScanError]);
 
   // ============================================
+  // ✅ GET SELECTED EVENT DATA
+  // ============================================
+
+  const selectedEventData = events.find((e) => e.id === selectedEvent);
+  const isEventCompleted = selectedEventData?.isCompleted === true;
+  const checkinPercentage = totalTickets > 0 ? (checkedInCount / totalTickets) * 100 : 0;
+
+  // ============================================
   // LOADING STATES
   // ============================================
 
-  if (status === "loading" || loading || !mounted) {
+  if (status === "loading" || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="text-center">
@@ -465,30 +448,12 @@ function CheckinContent() {
     return null;
   }
 
-  const selectedEventData = events.find((e) => e.id === selectedEvent);
-  const checkinPercentage = totalTickets > 0 ? (checkedInCount / totalTickets) * 100 : 0;
-
   // ============================================
   // RENDER
   // ============================================
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-      
-      {/* Theme Toggle Button */}
-      <div className="fixed top-4 right-4 z-50">
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          aria-label="Toggle theme"
-        >
-          {theme === "light" ? (
-            <MoonIcon className="h-5 w-5 text-gray-600" />
-          ) : (
-            <SunIcon className="h-5 w-5 text-yellow-400" />
-          )}
-        </button>
-      </div>
 
       {/* Main Content */}
       <main className="mx-auto max-w-5xl px-3 sm:px-4 py-6 sm:py-12 lg:px-8">
@@ -548,11 +513,29 @@ function CheckinContent() {
               events.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.title} - {new Date(e.eventDate).toLocaleDateString()}
+                  {e.isCompleted && " (Completed)"}
                 </option>
               ))
             )}
           </select>
         </div>
+
+        {/* ✅ Event Completed Warning */}
+        {isEventCompleted && (
+          <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="flex items-center gap-3">
+              <CheckCircleIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div>
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  This event has been marked as completed.
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Check-in is not available for completed events.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Message Alert */}
         {message && (
@@ -603,6 +586,7 @@ function CheckinContent() {
 
         {selectedEventData && (
           <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4 sm:gap-6">
+            
             {/* Left Column - Scanner & Manual */}
             <div className="space-y-4 sm:space-y-6 order-2 lg:order-1">
               {/* QR Scanner Section */}
@@ -613,15 +597,27 @@ function CheckinContent() {
                     QR Code Scanner
                   </h2>
                   <p className="text-white/70 text-xs mt-1">
-                    Scan individual ticket QR codes
+                    {isEventCompleted ? "Check-in unavailable" : "Scan individual ticket QR codes"}
                   </p>
                 </div>
 
                 <div className="p-4 sm:p-6">
-                  <div className="rounded-lg overflow-hidden bg-gray-900">
-                    {/* ✅ Scanner with stable key to prevent remounting */}
-                    {scannerComponent}
-                  </div>
+                  {isEventCompleted ? (
+                    <div className="flex flex-col items-center justify-center h-[350px] bg-gray-100 dark:bg-gray-700 rounded-lg">
+                      <CheckCircleIcon className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">
+                        Event Completed
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                        No check-in available for completed events
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg overflow-hidden bg-gray-900">
+                      {scannerComponent}
+                    </div>
+                  )}
+                  
                   <div className="mt-4 text-center">
                     <div className="inline-flex items-center gap-2 text-xs text-gray-500">
                       <div
@@ -631,6 +627,8 @@ function CheckinContent() {
                       ></div>
                       {checkingIn
                         ? "Processing..."
+                        : isEventCompleted
+                        ? "Check-in disabled"
                         : "Camera ready - scan each ticket's unique QR code"}
                     </div>
                   </div>
@@ -648,8 +646,8 @@ function CheckinContent() {
                 </div>
               </div>
 
-              {/* Test Mode Section */}
-              {testMode && (
+              {/* Test Mode Section - Hide if completed */}
+              {!isEventCompleted && testMode && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl sm:rounded-2xl border-2 border-yellow-300 dark:border-yellow-700 p-4 sm:p-6">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
@@ -688,74 +686,76 @@ function CheckinContent() {
                 </div>
               )}
 
-              {/* Manual Check-in */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6">
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">
-                  Manual Check-in
-                </h3>
+              {/* Manual Check-in - Hide if completed */}
+              {!isEventCompleted && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6">
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">
+                    Manual Check-in
+                  </h3>
 
-                <div className="flex gap-2 mb-3">
-                  <button
-                    onClick={() => setManualInputType("ticketNumber")}
-                    className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                      manualInputType === "ticketNumber"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                    }`}
-                  >
-                    Ticket Number
-                  </button>
-                  <button
-                    onClick={() => setManualInputType("email")}
-                    className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                      manualInputType === "email"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                    }`}
-                  >
-                    Email Address
-                  </button>
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={() => setManualInputType("ticketNumber")}
+                      className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                        manualInputType === "ticketNumber"
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      Ticket Number
+                    </button>
+                    <button
+                      onClick={() => setManualInputType("email")}
+                      className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                        manualInputType === "email"
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      Email Address
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type={manualInputType === "email" ? "email" : "text"}
+                      placeholder={
+                        manualInputType === "email"
+                          ? "Enter attendee email"
+                          : "Enter ticket number (e.g., TKT-xxxxx)"
+                      }
+                      value={manualInput}
+                      onChange={(e) => setManualInput(e.target.value)}
+                      className="flex-1 px-3 py-2 sm:px-4 sm:py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white font-mono"
+                    />
+                    <button
+                      onClick={handleManualCheckin}
+                      disabled={checkingIn}
+                      className="px-4 py-2 sm:px-6 sm:py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    >
+                      {checkingIn
+                        ? "Processing..."
+                        : manualInputType === "email"
+                        ? "Find Tickets"
+                        : "Check In"}
+                    </button>
+                  </div>
+
+                  {manualInputType === "email" && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      💡 Enter email to see all unchecked tickets for this user
+                    </p>
+                  )}
+                  {manualInputType === "ticketNumber" && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      💡 Enter the unique ticket number found on the ticket
+                    </p>
+                  )}
                 </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type={manualInputType === "email" ? "email" : "text"}
-                    placeholder={
-                      manualInputType === "email"
-                        ? "Enter attendee email"
-                        : "Enter ticket number (e.g., TKT-xxxxx)"
-                    }
-                    value={manualInput}
-                    onChange={(e) => setManualInput(e.target.value)}
-                    className="flex-1 px-3 py-2 sm:px-4 sm:py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white font-mono"
-                  />
-                  <button
-                    onClick={handleManualCheckin}
-                    disabled={checkingIn}
-                    className="px-4 py-2 sm:px-6 sm:py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                  >
-                    {checkingIn
-                      ? "Processing..."
-                      : manualInputType === "email"
-                      ? "Find Tickets"
-                      : "Check In"}
-                  </button>
-                </div>
-
-                {manualInputType === "email" && (
-                  <p className="text-xs text-gray-400 mt-2">
-                    💡 Enter email to see all unchecked tickets for this user
-                  </p>
-                )}
-                {manualInputType === "ticketNumber" && (
-                  <p className="text-xs text-gray-400 mt-2">
-                    💡 Enter the unique ticket number found on the ticket
-                  </p>
-                )}
-              </div>
+              )}
 
               {/* Unchecked Tickets List */}
-              {showTicketList && uncheckedTickets.length > 0 && (
+              {!isEventCompleted && showTicketList && uncheckedTickets.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                   <div className="bg-gradient-to-r from-yellow-500 to-orange-500 px-4 sm:px-6 py-3">
                     <h3 className="text-sm font-semibold text-white flex items-center">
@@ -822,6 +822,11 @@ function CheckinContent() {
               <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-5">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">
                   {selectedEventData.title}
+                  {isEventCompleted && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      Completed
+                    </span>
+                  )}
                 </h3>
                 <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                   <div className="flex items-center">

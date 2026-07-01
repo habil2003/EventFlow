@@ -13,8 +13,22 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export async function sendVerificationEmail(email: string, token: string) {
-  const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`;
+// ✅ Helper to get base URL dynamically
+function getBaseUrl(customBaseUrl?: string): string {
+  if (customBaseUrl) return customBaseUrl;
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
+// ✅ UPDATED: Send verification email with dynamic URL
+export async function sendVerificationEmail(
+  email: string, 
+  token: string,
+  baseUrl?: string // ✅ NEW: Optional dynamic URL
+) {
+  const appUrl = getBaseUrl(baseUrl);
+  const verificationUrl = `${appUrl}/verify-email?token=${token}`;
+  
+  console.log('📧 [email] Verification link:', verificationUrl);
   
   await transporter.sendMail({
     from: `"EventFlow" <${process.env.SMTP_FROM}>`,
@@ -53,8 +67,16 @@ export async function sendVerificationEmail(email: string, token: string) {
   });
 }
 
-export async function sendPasswordResetEmail(email: string, token: string) {
-  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`;
+// ✅ UPDATED: Send password reset email with dynamic URL
+export async function sendPasswordResetEmail(
+  email: string, 
+  token: string,
+  baseUrl?: string // ✅ NEW: Optional dynamic URL
+) {
+  const appUrl = getBaseUrl(baseUrl);
+  const resetUrl = `${appUrl}/reset-password?token=${token}`;
+  
+  console.log('📧 [email] Password reset link:', resetUrl);
   
   await transporter.sendMail({
     from: `"EventFlow" <${process.env.SMTP_FROM}>`,
@@ -93,7 +115,7 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   });
 }
 
-// ✅ NEW: Send vendor decline refund notification to customer
+// ✅ NEW: Send vendor decline refund notification to customer (with dynamic URL)
 export async function sendVendorDeclineRefundEmail(
   customerEmail: string,
   customerName: string,
@@ -104,8 +126,11 @@ export async function sendVendorDeclineRefundEmail(
     vendorName: string;
     refundAmount: number;
   },
-  refundStatus: 'PROCESSED' | 'PENDING_ADMIN' | 'FAILED'
+  refundStatus: 'PROCESSED' | 'PENDING_ADMIN' | 'FAILED',
+  baseUrl?: string // ✅ NEW: Optional dynamic URL
 ) {
+  const appUrl = getBaseUrl(baseUrl);
+  
   let statusMessage = '';
   let statusColor = '';
   let statusIcon = '';
@@ -164,7 +189,7 @@ export async function sendVendorDeclineRefundEmail(
           
           <p>We apologize for any inconvenience caused. You can browse other vendors for your event:</p>
           <div style="text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL}/marketplace" style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0;">
+            <a href="${appUrl}/marketplace" style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0;">
               Browse Other Vendors
             </a>
           </div>
@@ -173,7 +198,7 @@ export async function sendVendorDeclineRefundEmail(
           <hr style="margin: 30px 0 20px; border-color: #e5e7eb;">
           <p style="color: #6b7280; font-size: 12px; text-align: center;">
             EventFlow Support Team<br>
-            <a href="${process.env.NEXT_PUBLIC_APP_URL}/support" style="color: #4f46e5;">Contact Support</a>
+            <a href="${appUrl}/support" style="color: #4f46e5;">Contact Support</a>
           </p>
         </div>
       </body>
@@ -182,15 +207,17 @@ export async function sendVendorDeclineRefundEmail(
   });
 }
 
-// ✅ NEW: Send admin notification for manual refund required
+// ✅ NEW: Send admin notification for manual refund required (with dynamic URL)
 export async function sendAdminManualRefundAlert(
   bookingId: string,
   vendorName: string,
   customerEmail: string,
   refundAmount: number,
-  gatewayTransactionId: string
+  gatewayTransactionId: string,
+  baseUrl?: string // ✅ NEW: Optional dynamic URL
 ) {
-  const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL}/admin/refunds`;
+  const appUrl = getBaseUrl(baseUrl);
+  const dashboardUrl = `${appUrl}/admin/refunds`;
   
   await transporter.sendMail({
     from: `"EventFlow Admin" <${process.env.SMTP_FROM}>`,
@@ -245,7 +272,7 @@ export async function sendAdminManualRefundAlert(
   });
 }
 
-// ✅ NEW: Send vendor acceptance notification to customer
+// ✅ NEW: Send vendor acceptance notification to customer (with dynamic URL)
 export async function sendVendorAcceptanceEmail(
   customerEmail: string,
   customerName: string,
@@ -254,8 +281,11 @@ export async function sendVendorAcceptanceEmail(
     eventDate: string;
     packageName: string;
     vendorName: string;
-  }
+  },
+  baseUrl?: string // ✅ NEW: Optional dynamic URL
 ) {
+  const appUrl = getBaseUrl(baseUrl);
+  
   await transporter.sendMail({
     from: `"EventFlow" <${process.env.SMTP_FROM}>`,
     to: customerEmail,
@@ -286,7 +316,7 @@ export async function sendVendorAcceptanceEmail(
           <p>The vendor will contact you shortly with further details about your event.</p>
           
           <div style="text-align: center;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL}/my-bookings" style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0;">
+            <a href="${appUrl}/my-bookings" style="display: inline-block; padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin: 20px 0;">
               View My Bookings
             </a>
           </div>

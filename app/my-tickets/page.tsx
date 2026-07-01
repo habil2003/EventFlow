@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -16,6 +15,7 @@ import {
   XCircleIcon,
   ArrowRightIcon,
   ClipboardDocumentIcon,
+  ShoppingCartIcon,
 } from "@heroicons/react/24/outline";
 
 interface Ticket {
@@ -37,8 +37,7 @@ interface Ticket {
   refundAmount?: number | null;
 }
 
-// ✅ Component that uses useSearchParams()
-function TicketsContent() {
+function MyTicketsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -162,6 +161,7 @@ function TicketsContent() {
     );
   }
 
+  // ✅ Fixed splits — cancelled tickets excluded from upcoming and past
   const upcomingTickets = tickets.filter(
     (t) =>
       !t.checkedIn &&
@@ -196,10 +196,41 @@ function TicketsContent() {
     };
   };
 
+  const getPaymentStatusBadge = (status: string) => {
+    switch (status) {
+      case "COMPLETED":
+        return {
+          text: "Paid",
+          color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+        };
+      case "HELD_IN_ESCROW":
+        return {
+          text: "Confirmed (Escrow)",
+          color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+        };
+      case "PENDING":
+        return {
+          text: "Payment Pending",
+          color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
+        };
+      case "REFUNDED":
+        return {
+          text: "Refunded",
+          color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+        };
+      default:
+        return {
+          text: status || "Unknown",
+          color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+        };
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
 
+        {/* Header */}
         <motion.div
           initial="hidden"
           animate="visible"
@@ -215,24 +246,35 @@ function TicketsContent() {
                 Manage your event tickets and QR codes
               </p>
             </div>
-            <div className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-3 py-1 text-sm font-medium text-indigo-700 dark:text-indigo-300">
-              <TicketIcon className="mr-1 h-4 w-4" />
-              {upcomingTickets.length} Upcoming
+            <div className="flex items-center gap-3">
+              <Link
+                href="/events"
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <ShoppingCartIcon className="h-4 w-4 mr-2" />
+                Buy More Tickets
+              </Link>
+              <div className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-3 py-1 text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                <TicketIcon className="mr-1 h-4 w-4" />
+                {upcomingTickets.length} Upcoming
+              </div>
             </div>
           </div>
         </motion.div>
 
+        {/* Payment Success Message */}
         {paymentSuccess === "success" && (
           <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
             <div className="flex items-center gap-3">
               <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
               <p className="text-green-700 dark:text-green-300">
-                Payment successful! Your tickets have been booked.
+                ✅ Payment successful! Your tickets have been booked.
               </p>
             </div>
           </div>
         )}
 
+        {/* Upcoming Tickets */}
         <div className="mb-12">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Upcoming Tickets
@@ -273,6 +315,7 @@ function TicketsContent() {
               {upcomingTickets.map((ticket) => {
                 const statusBadge = getStatusBadge(ticket.checkedIn);
                 const StatusIcon = statusBadge.icon;
+                const paymentBadge = getPaymentStatusBadge(ticket.paymentStatus);
                 const isCancelling = cancellingId === ticket.id;
 
                 return (
@@ -289,12 +332,19 @@ function TicketsContent() {
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                               {ticket.eventTitle}
                             </h3>
-                            <span
-                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusBadge.color}`}
-                            >
-                              <StatusIcon className="h-3 w-3 mr-1" />
-                              {statusBadge.text}
-                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${statusBadge.color}`}
+                              >
+                                <StatusIcon className="h-3 w-3 mr-1" />
+                                {statusBadge.text}
+                              </span>
+                              <span
+                                className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${paymentBadge.color}`}
+                              >
+                                {paymentBadge.text}
+                              </span>
+                            </div>
                           </div>
 
                           <div className="flex flex-wrap gap-4 mt-3">
@@ -364,6 +414,7 @@ function TicketsContent() {
                           </div>
                         </div>
 
+                        {/* Action Buttons */}
                         <div className="flex flex-col gap-2 min-w-[160px]">
                           <Link
                             href={`/tickets/${ticket.id}`}
@@ -373,23 +424,26 @@ function TicketsContent() {
                             View QR Code
                           </Link>
 
-                          <button
-                            onClick={() => handleCancelTicket(ticket)}
-                            disabled={isCancelling}
-                            className="flex items-center justify-center px-4 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors text-sm disabled:opacity-50"
-                          >
-                            {isCancelling ? (
-                              <>
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent mr-2"></div>
-                                Cancelling...
-                              </>
-                            ) : (
-                              <>
-                                <XCircleIcon className="h-4 w-4 mr-2" />
-                                Cancel Ticket
-                              </>
-                            )}
-                          </button>
+                          {/* ✅ Cancel button - only for PENDING or HELD_IN_ESCROW */}
+                          {(ticket.paymentStatus === "PENDING" || ticket.paymentStatus === "HELD_IN_ESCROW") && (
+                            <button
+                              onClick={() => handleCancelTicket(ticket)}
+                              disabled={isCancelling}
+                              className="flex items-center justify-center px-4 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors text-sm disabled:opacity-50"
+                            >
+                              {isCancelling ? (
+                                <>
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent mr-2"></div>
+                                  Cancelling...
+                                </>
+                              ) : (
+                                <>
+                                  <XCircleIcon className="h-4 w-4 mr-2" />
+                                  Cancel Ticket
+                                </>
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -400,6 +454,7 @@ function TicketsContent() {
           )}
         </div>
 
+        {/* Past Tickets */}
         {pastTickets.length > 0 && (
           <div className="mb-12">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -409,6 +464,7 @@ function TicketsContent() {
               {pastTickets.map((ticket) => {
                 const statusBadge = getStatusBadge(ticket.checkedIn);
                 const StatusIcon = statusBadge.icon;
+                const paymentBadge = getPaymentStatusBadge(ticket.paymentStatus);
                 return (
                   <div
                     key={ticket.id}
@@ -429,6 +485,11 @@ function TicketsContent() {
                             <StatusIcon className="h-3 w-3 mr-1" />
                             {statusBadge.text}
                           </span>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${paymentBadge.color}`}
+                          >
+                            {paymentBadge.text}
+                          </span>
                         </div>
                         <div className="mt-2">
                           <span className="text-xs text-gray-400">
@@ -439,6 +500,12 @@ function TicketsContent() {
                           </span>
                         </div>
                       </div>
+                      <Link
+                        href={`/tickets/${ticket.id}`}
+                        className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline"
+                      >
+                        View Details →
+                      </Link>
                     </div>
                   </div>
                 );
@@ -447,6 +514,7 @@ function TicketsContent() {
           </div>
         )}
 
+        {/* Cancelled Tickets */}
         {cancelledTickets.length > 0 && (
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
@@ -479,6 +547,7 @@ function TicketsContent() {
                       </div>
                     </div>
 
+                    {/* Refund status */}
                     <div className="min-w-[180px]">
                       {ticket.refundStatus === "PENDING_ADMIN" && (
                         <div className="flex items-start gap-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
@@ -537,7 +606,6 @@ function TicketsContent() {
             </div>
           </div>
         )}
-
       </main>
     </div>
   );
@@ -546,17 +614,19 @@ function TicketsContent() {
 // ✅ Main export with Suspense boundary
 export default function MyTicketsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-        <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent dark:border-indigo-400"></div>
-          <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">
-            Loading your tickets...
-          </p>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+          <div className="text-center">
+            <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent dark:border-indigo-400"></div>
+            <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">
+              Loading your tickets...
+            </p>
+          </div>
         </div>
-      </div>
-    }>
-      <TicketsContent />
+      }
+    >
+      <MyTicketsContent />
     </Suspense>
   );
 }

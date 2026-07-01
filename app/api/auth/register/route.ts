@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendVerificationEmail } from "@/lib/email";
+import { getAppUrl } from "@/lib/app-url"; // ✅ Import getAppUrl
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +14,15 @@ export async function POST(request: Request) {
     if (!name || !email || !password || !role) {
       return NextResponse.json(
         { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: "Invalid email format" },
         { status: 400 }
       );
     }
@@ -37,7 +47,6 @@ export async function POST(request: Request) {
     const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     // Determine account status based on role and email verification
-    // All users need email verification, but organizers/vendors also need admin approval
     const accountStatus = "PENDING"; // All start as PENDING until email verified
 
     // Create user
@@ -97,11 +106,18 @@ export async function POST(request: Request) {
       });
     }
 
-    // Send verification email (skip for now if no SMTP config)
+    // ✅ FIX: Get dynamic app URL from request
+    const appUrl = getAppUrl(request);
+    console.log('📍 [register] App URL:', appUrl);
+
+    // ✅ Send verification email with dynamic URL
+    let emailSent = false;
     try {
-      await sendVerificationEmail(email, verificationToken);
+      await sendVerificationEmail(email, verificationToken, appUrl); // ✅ Pass appUrl
+      emailSent = true;
+      console.log('✅ [register] Verification email sent to:', email);
     } catch (emailError) {
-      console.error("Failed to send verification email:", emailError);
+      console.error("❌ [register] Failed to send verification email:", emailError);
       // Don't fail registration if email fails, but log it
     }
 
@@ -109,22 +125,30 @@ export async function POST(request: Request) {
     const { passwordHash, ...userWithoutPassword } = user;
 
     let message = "";
+    let requiresApproval = false;
+
     if (role === "USER") {
       message = "Account created successfully! Please check your email to verify your account.";
+      requiresApproval = false;
     } else {
       message = "Registration submitted. Please check your email to verify your account, then wait for admin approval.";
+      requiresApproval = true;
     }
 
     return NextResponse.json(
       {
+        success: true,
         message,
         user: userWithoutPassword,
         requiresVerification: true,
+        requiresApproval,
+        emailSent,
+        role,
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error("❌ [register] Registration error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
