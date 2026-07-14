@@ -45,3 +45,5 @@ next-env.d.ts
 certificates
 
 # Uploaded proof images
+.pnpm-store/
+*.zip
