@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import ImageUpload from "@/components/ImageUpload";
+import { useImageCleanup } from "@/hooks/useImageCleanup";
 import { 
   CalendarIcon, 
   MapPinIcon, 
@@ -16,8 +16,14 @@ import {
   MoonIcon,
   SunIcon,
   ArrowLeftIcon,
-  SparklesIcon
+  SparklesIcon,
+  PhotoIcon
 } from "@heroicons/react/24/outline";
+
+const generateId = () => {
+  return Math.random().toString(36).substring(2, 15) + 
+         Math.random().toString(36).substring(2, 15);
+};
 
 interface TicketTier {
   id: string;
@@ -33,9 +39,13 @@ export default function CreateEventPage() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [eventImageUrl, setEventImageUrl] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  
+  // Support multiple images
+  const [eventImages, setEventImages] = useState<string[]>([]);
+  const [mainImage, setMainImage] = useState<string | null>(null);
 
-  // Event fields - using string for number inputs to prevent leading zero issues
+  // Event fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -45,10 +55,17 @@ export default function CreateEventPage() {
 
   // Ticket tiers
   const [ticketTiers, setTicketTiers] = useState<TicketTier[]>([
-    { id: crypto.randomUUID(), name: "Early Bird", price: 500, quantity: 100 },
-    { id: crypto.randomUUID(), name: "GA", price: 1000, quantity: 500 },
-    { id: crypto.randomUUID(), name: "VIP", price: 2500, quantity: 50 },
+    { id: generateId(), name: "Early Bird", price: 500, quantity: 100 },
+    { id: generateId(), name: "GA", price: 1000, quantity: 500 },
+    { id: generateId(), name: "VIP", price: 2500, quantity: 50 },
   ]);
+
+  // ✅ Image cleanup hook
+  const { orphanedImages, isCleaningUp, cleanupImages } = useImageCleanup({
+    mainImage,
+    galleryImages: eventImages,
+    isSaved,
+  });
 
   // Theme management
   useEffect(() => {
@@ -67,33 +84,63 @@ export default function CreateEventPage() {
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
 
-  const handleImageUpload = (url: string) => {
-    setEventImageUrl(url);
+  const handleImageUpload = (result: string | string[]) => {
+    if (Array.isArray(result)) {
+      if (result.length > 0) {
+        setMainImage(result[0]);
+        if (result.length > 1) {
+          const remainingImages = result.slice(1);
+          setEventImages(prev => [...prev, ...remainingImages]);
+        }
+      }
+    } else {
+      if (!mainImage) {
+        setMainImage(result);
+      } else {
+        setEventImages(prev => [...prev, result]);
+      }
+    }
   };
 
-  const handleRemoveImage = () => {
-    setEventImageUrl(null);
+  const handleRemoveImage = (url: string) => {
+    if (url === mainImage) {
+      if (eventImages.length > 0) {
+        const [first, ...rest] = eventImages;
+        setMainImage(first);
+        setEventImages(rest);
+      } else {
+        setMainImage(null);
+      }
+    } else {
+      setEventImages(prev => prev.filter(img => img !== url));
+    }
+  };
+
+  const setAsMain = (url: string) => {
+    if (url === mainImage) return;
+    setEventImages(prev => prev.filter(img => img !== url));
+    if (mainImage) {
+      setEventImages(prev => [...prev, mainImage!]);
+    }
+    setMainImage(url);
   };
 
   const addTicketTier = () => {
     setTicketTiers([
       ...ticketTiers,
-      { id: crypto.randomUUID(), name: "New Tier", price: 0, quantity: 0 },
+      { id: generateId(), name: "New Tier", price: 0, quantity: 0 },
     ]);
   };
 
-  // Fixed: Handle number input for ticket tiers without leading zeros
   const updateTicketTier = (id: string, field: keyof TicketTier, value: string | number) => {
     setTicketTiers(ticketTiers.map(tier => {
       if (tier.id === id) {
         if (field === 'price' || field === 'quantity') {
           let stringValue = value.toString();
           stringValue = stringValue.replace(/^0+/, '');
-          
           if (stringValue === '') {
             return { ...tier, [field]: 0 };
           }
-          
           const numValue = parseInt(stringValue, 10);
           if (!isNaN(numValue)) {
             return { ...tier, [field]: numValue };
@@ -113,18 +160,17 @@ export default function CreateEventPage() {
   const handleCapacityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
     value = value.replace(/^0+/, '');
-    
     if (value === '') {
       setCapacity('');
       return;
     }
-    
     const numValue = parseInt(value, 10);
     if (!isNaN(numValue)) {
       setCapacity(numValue.toString());
     }
   };
 
+  // ✅ Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -132,6 +178,12 @@ export default function CreateEventPage() {
 
     if (!title || !eventDate || !eventTime || !location) {
       setError("Please fill all required fields");
+      setLoading(false);
+      return;
+    }
+
+    if (!mainImage) {
+      setError("Please upload at least one event image");
       setLoading(false);
       return;
     }
@@ -168,13 +220,15 @@ export default function CreateEventPage() {
           location,
           capacity: numericCapacity,
           ticketTiers: validTiers,
-          imageUrl: eventImageUrl,
+          imageUrl: mainImage,
+          galleryImages: eventImages,
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
+        setIsSaved(true);
         router.push("/organizer/events");
       } else {
         setError(data.error || "Failed to create event");
@@ -185,6 +239,21 @@ export default function CreateEventPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ✅ Handle cancel with cleanup
+  const handleCancel = async () => {
+    if (orphanedImages.length > 0) {
+      const confirmed = confirm(
+        `You have ${orphanedImages.length} unsaved image(s). They will be deleted. Continue?`
+      );
+      if (confirmed) {
+        await cleanupImages(orphanedImages);
+      } else {
+        return;
+      }
+    }
+    router.push("/organizer/events");
   };
 
   if (!mounted || status === "loading") {
@@ -208,15 +277,18 @@ export default function CreateEventPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       
-      
-
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         
-        <div className="mb-8">
-          <Link href="/" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+        <div className="mb-8 flex justify-between items-center">
+          <Link href="/organizer/events" className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
             <ArrowLeftIcon className="h-4 w-4 mr-1" />
-            Back to Dashboard
+            Back to Events
           </Link>
+          {orphanedImages.length > 0 && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              ⚠️ {orphanedImages.length} unsaved image(s)
+            </span>
+          )}
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -226,42 +298,123 @@ export default function CreateEventPage() {
           </div>
           
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Event Image Upload - FIXED: No empty space */}
+            {/* Event Images */}
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Event Image</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Event Images</h2>
               
-              <div className="space-y-4">
-                {eventImageUrl ? (
-                  <div className="relative border-2 border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-700/50">
-                    <div className="w-full">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Main Image */}
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Main Image *
+                  </label>
+                  {mainImage ? (
+                    <div className="relative">
                       <img
-                        src={eventImageUrl}
-                        alt="Event preview"
-                        className="w-full h-auto max-h-96 object-contain mx-auto"
+                        src={mainImage}
+                        alt="Main event image"
+                        className="w-full h-32 object-cover rounded-lg"
                       />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (eventImages.length > 0) {
+                            const [first, ...rest] = eventImages;
+                            setMainImage(first);
+                            setEventImages(rest);
+                          } else {
+                            setMainImage(null);
+                          }
+                        }}
+                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        <TrashIcon className="h-3 w-3" />
+                      </button>
+                      <span className="absolute bottom-1 left-1 px-2 py-0.5 bg-indigo-600 text-white text-xs rounded">
+                        Main
+                      </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-lg"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+                  ) : (
                     <ImageUpload
-                      onUploadComplete={handleImageUpload}
-                      onRemove={handleRemoveImage}
-                      existingImage={eventImageUrl}
-                      label="Upload event image (max 4MB)"
+                      onUploadComplete={(result) => {
+                        if (Array.isArray(result)) {
+                          if (result.length > 0) {
+                            setMainImage(result[0]);
+                          }
+                        } else {
+                          setMainImage(result);
+                        }
+                      }}
+                      onRemove={() => setMainImage(null)}
+                      existingImage={mainImage}
+                      label="Upload main image"
+                      compact={true}
                     />
+                  )}
+                </div>
+
+                {/* Gallery Images */}
+                <div className="md:col-span-2">
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Gallery Images ({eventImages.length}/10)
+                    </label>
+                    <span className="text-xs text-gray-400">
+                      {10 - eventImages.length} slots remaining
+                    </span>
                   </div>
-                )}
-                
-                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                  Recommended: Landscape images (16:9 ratio) work best. Max size 4MB.
-                </p>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    {eventImages.map((img, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={img}
+                          alt={`Gallery ${index + 1}`}
+                          className={`w-full h-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity ${
+                            img === mainImage ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
+                          }`}
+                          onClick={() => setAsMain(img)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(img)}
+                          className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                        >
+                          <TrashIcon className="h-3 w-3" />
+                        </button>
+                        {img === mainImage ? (
+                          <span className="absolute bottom-1 left-1 px-2 py-0.5 bg-indigo-600 text-white text-xs rounded">
+                            Main
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setAsMain(img)}
+                            className="absolute bottom-1 left-1 px-2 py-0.5 bg-black/70 text-white text-xs rounded hover:bg-black/90 transition-colors"
+                          >
+                            Set as Main
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    
+                    {eventImages.length < 10 && (
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-2 text-center min-h-[100px] flex items-center justify-center hover:border-indigo-500 transition-colors">
+                        <ImageUpload
+                          onUploadComplete={handleImageUpload}
+                          onRemove={() => {}}
+                          existingImage={null}
+                          label="Add Images"
+                          compact={true}
+                          multiple={true}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    📸 Click a gallery image to set it as main. Select multiple images at once (max 10 total).
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -427,23 +580,34 @@ export default function CreateEventPage() {
               </div>
             )}
 
-            <button 
-              type="submit" 
-              disabled={loading} 
-              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Creating Event...
-                </span>
-              ) : (
-                "Create Event"
-              )}
-            </button>
+            {/* ✅ Form Actions with Cancel button */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={isCleaningUp}
+                className="flex-1 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                {isCleaningUp ? "Cleaning up..." : "Cancel"}
+              </button>
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creating Event...
+                  </span>
+                ) : (
+                  "Create Event"
+                )}
+              </button>
+            </div>
           </form>
         </div>
       </main>

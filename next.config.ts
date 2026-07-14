@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     '*.local',
     '*.ngrok.io',
     '*.ngrok-free.app',
+    '*.ngrok-free.dev',
   ],
   
   // ✅ Images configuration
@@ -32,12 +33,29 @@ const nextConfig: NextConfig = {
         hostname: '*.ngrok-free.app',
       },
       {
+        protocol: 'https',
+        hostname: '*.ngrok-free.dev',
+      },
+      {
         protocol: 'http',
         hostname: '*.ngrok.io',
       },
       {
         protocol: 'http',
         hostname: '*.ngrok-free.app',
+      },
+      {
+        protocol: 'http',
+        hostname: '*.ngrok-free.dev',
+      },
+      // ✅ Add UploadThing domains
+      {
+        protocol: 'https',
+        hostname: '*.ufs.sh',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.uploadthing.com',
       },
     ],
   },
@@ -66,10 +84,11 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(self), microphone=(self), geolocation=(self)',
           },
-          // CORS headers
+          // ✅ FIX: Change COEP from 'require-corp' to 'credentialless'
+          // This allows cross-origin resources like UploadThing images
           {
             key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp',
+            value: 'credentialless',
           },
           {
             key: 'Cross-Origin-Opener-Policy',

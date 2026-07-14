@@ -1,3 +1,4 @@
+// app/api/uploadthing/core.ts
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -18,5 +19,4 @@ export const ourFileRouter = {
     }),
 } satisfies FileRouter;
 
-// ✅ Export type for use in other files
 export type OurFileRouter = typeof ourFileRouter;

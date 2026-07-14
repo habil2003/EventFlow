@@ -54,7 +54,6 @@ interface EscrowBooking {
     availableActions?: string[];
     vendorPaymentStatus?: string;
     depositReleasedAt?: string | null;
-    // ✅ NEW FIELDS
     bookingStatus?: string;
     vendorAccepted?: boolean;
     vendorPending?: boolean;
@@ -198,7 +197,7 @@ export default function AdminEscrowPage() {
             });
 
             if (response.ok) {
-                setMessage({ text: 'Payout verified successfully!', type: "success" });
+                setMessage({ text: '✅ Bank transfer confirmed and marked as paid!', type: "success" });
                 setShowVerifyModal(false);
                 setVerificationData({
                     transactionReference: '',
@@ -210,12 +209,12 @@ export default function AdminEscrowPage() {
                 setTimeout(() => setMessage(null), 3000);
             } else {
                 const error = await response.json();
-                setMessage({ text: error.error || 'Failed to verify payout', type: "error" });
+                setMessage({ text: error.error || 'Failed to confirm transfer', type: "error" });
                 setTimeout(() => setMessage(null), 5000);
             }
         } catch (error) {
-            console.error('Error verifying payout:', error);
-            setMessage({ text: 'Error verifying payout', type: "error" });
+            console.error('Error confirming transfer:', error);
+            setMessage({ text: 'Error confirming transfer', type: "error" });
             setTimeout(() => setMessage(null), 5000);
         } finally {
             setUploading(false);
@@ -241,7 +240,7 @@ export default function AdminEscrowPage() {
     const getReleaseStatusBadge = (booking: EscrowBooking) => {
         if (booking.paymentStatus === "PROCESSING_PAYOUT") {
             return {
-                text: 'Pending Verification',
+                text: 'Processing Payment',
                 color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
                 icon: ArrowPathIcon
             };
@@ -456,7 +455,7 @@ export default function AdminEscrowPage() {
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Pending Verification</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">Processing Payments</p>
                                 <p className="text-2xl font-bold text-purple-600 dark:text-purple-500">{totalPendingVerification}</p>
                             </div>
                             <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
@@ -468,7 +467,7 @@ export default function AdminEscrowPage() {
                             </div>
                         </div>
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                            {totalPendingVerification > 0 ? 'Awaiting manual verification' : 'All payouts verified'}
+                            {totalPendingVerification > 0 ? 'Awaiting manual transfer confirmation' : 'All payouts completed'}
                         </p>
                     </div>
                 </div>
@@ -536,7 +535,7 @@ export default function AdminEscrowPage() {
                     >
                         <option value="all">All Status</option>
                         <option value="HELD_IN_ESCROW">Held in Escrow</option>
-                        <option value="PROCESSING_PAYOUT">Pending Verification</option>
+                        <option value="PROCESSING_PAYOUT">Processing</option>
                     </select>
                 </div>
 
@@ -638,7 +637,7 @@ export default function AdminEscrowPage() {
                                                 </span>
                                             </td>
 
-                                            {/* ✅ NEW: Vendor Status column */}
+                                            {/* Vendor Status column */}
                                             <td className="px-6 py-4">
                                                 {booking.type === 'VENDOR' && vendorStatusBadge ? (
                                                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${vendorStatusBadge.color}`}>
@@ -701,18 +700,18 @@ export default function AdminEscrowPage() {
                                                         </button>
                                                     )}
 
-                                                    {/* Verify Payout Button */}
+                                                    {/* Confirm Transfer Button */}
                                                     {isProcessingPayout && booking.hasPendingPayout && booking.pendingPayouts?.[0] && (
                                                         <button
                                                             onClick={() => {
-  if (booking.pendingPayouts && booking.pendingPayouts.length > 0) {
-    openVerifyModal(booking.pendingPayouts[0]);
-  }
-}}
-                                                            className="px-3 py-1.5 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                                                                if (booking.pendingPayouts && booking.pendingPayouts.length > 0) {
+                                                                    openVerifyModal(booking.pendingPayouts[0]);
+                                                                }
+                                                            }}
+                                                            className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
                                                         >
                                                             <CheckCircleIcon className="h-4 w-4 inline mr-1" />
-                                                            Verify Payout
+                                                            Confirm Transfer
                                                         </button>
                                                     )}
 
@@ -777,7 +776,7 @@ export default function AdminEscrowPage() {
                                             </h3>
 
                                             <div className="mt-4 space-y-3">
-                                                {/* Status Badge - FIXED */}
+                                                {/* Status Badge */}
                                                 {(() => {
                                                     const statusBadge = getReleaseStatusBadge(selectedBooking);
                                                     const StatusIcon = statusBadge.icon;
@@ -1082,7 +1081,7 @@ export default function AdminEscrowPage() {
                                                                 Manual Transfer Required
                                                             </p>
                                                             <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1">
-                                                                After confirming, you will need to manually transfer the money to the {selectedBooking.type === 'VENDOR' ? 'vendor' : 'organizer'} via bank transfer or Khalti dashboard, then verify the payout with proof.
+                                                                After confirming, you will need to manually transfer the money to the {selectedBooking.type === 'VENDOR' ? 'vendor' : 'organizer'} via bank transfer, then confirm the transfer with proof.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -1129,7 +1128,7 @@ export default function AdminEscrowPage() {
             </AnimatePresence>
 
             {/* ============================================ */}
-            {/* VERIFY PAYOUT MODAL */}
+            {/* CONFIRM BANK TRANSFER MODAL */}
             {/* ============================================ */}
             <AnimatePresence>
                 {showVerifyModal && selectedPayout && (
@@ -1148,13 +1147,16 @@ export default function AdminEscrowPage() {
                             >
                                 <div className="bg-white dark:bg-gray-800 px-6 pt-5 pb-4">
                                     <div className="sm:flex sm:items-start">
-                                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30 sm:mx-0 sm:h-10 sm:w-10">
-                                            <ShieldCheckIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 sm:mx-0 sm:h-10 sm:w-10">
+                                            <BanknotesIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
                                         </div>
                                         <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                                             <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white">
-                                                Verify Manual Payout
+                                                Confirm Bank Transfer
                                             </h3>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                                Confirm that you have transferred the money to the vendor/organizer
+                                            </p>
 
                                             <div className="mt-4 space-y-4">
                                                 <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
@@ -1177,7 +1179,6 @@ export default function AdminEscrowPage() {
                                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
                                                     >
                                                         <option value="BANK_TRANSFER">🏦 Bank Transfer</option>
-                                                        <option value="KHALTI_MANUAL">📱 Khalti Dashboard Transfer</option>
                                                         <option value="CASH">💵 Cash (Office Visit)</option>
                                                         <option value="CHEQUE">📝 Cheque</option>
                                                     </select>
@@ -1191,17 +1192,17 @@ export default function AdminEscrowPage() {
                                                         type="text"
                                                         value={verificationData.transactionReference}
                                                         onChange={(e) => setVerificationData({ ...verificationData, transactionReference: e.target.value })}
-                                                        placeholder="e.g., BANK-20241215-001, KHALTI-REF-12345, CHQ-001"
+                                                        placeholder="e.g., BANK-20241215-001, CHQ-001"
                                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                                     />
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                        Enter bank receipt number, Khalti transaction ID, or cheque number
+                                                        Enter bank receipt number, cheque number, or reference
                                                     </p>
                                                 </div>
 
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                        Upload Proof (Receipt/Screenshot) *
+                                                        Upload Proof (Bank Transfer Receipt/Screenshot) *
                                                     </label>
                                                     <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center relative hover:border-indigo-500 transition-colors">
                                                         {verificationData.proofImage ? (
@@ -1248,7 +1249,7 @@ export default function AdminEscrowPage() {
                                                         rows={2}
                                                         value={verificationData.notes}
                                                         onChange={(e) => setVerificationData({ ...verificationData, notes: e.target.value })}
-                                                        placeholder="Add internal notes about this payout..."
+                                                        placeholder="Add internal notes about this transfer..."
                                                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                                     />
                                                 </div>
@@ -1261,7 +1262,7 @@ export default function AdminEscrowPage() {
                                                                 Confirmation Required
                                                             </p>
                                                             <p className="text-xs text-red-600 dark:text-red-500 mt-1">
-                                                                I confirm that I have already transferred the money to the vendor/organizer.
+                                                                I confirm that I have successfully transferred the money to the vendor/organizer.
                                                             </p>
                                                         </div>
                                                     </div>
@@ -1284,7 +1285,7 @@ export default function AdminEscrowPage() {
                                                 Processing...
                                             </>
                                         ) : (
-                                            '✓ Verify & Complete'
+                                            '✅ Confirm Transfer'
                                         )}
                                     </button>
                                     <button

@@ -3,6 +3,25 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// ✅ Helper: Calculate refund percentage from amount
+function calculateRefundPercentageFromAmount(refundAmount: number, totalAmount: number): number | null {
+  if (!totalAmount || totalAmount === 0) return null;
+  return Math.round((refundAmount / totalAmount) * 100);
+}
+
+// ✅ Helper: Calculate days between two dates
+function calculateDaysUntilEvent(eventDate: Date, cancellationDate: Date): number {
+  const diffTime = eventDate.getTime() - cancellationDate.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+// ✅ Helper: Get refund percentage based on days until event
+function getRefundPercentageFromPolicy(daysUntilEvent: number): number {
+  if (daysUntilEvent >= 7) return 100;
+  if (daysUntilEvent >= 3) return 50;
+  return 0;
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -21,7 +40,6 @@ export async function GET() {
             userSocialEvent: true,
           },
         },
-        // ✅ FIXED: include ticketBooking
         ticketBooking: {
           include: {
             user: true,
@@ -37,7 +55,55 @@ export async function GET() {
     const formattedRefunds = refunds.map((refund) => {
       const isTicketRefund = !!refund.ticketBookingId;
 
-      // Build a unified booking shape for both types
+      // ✅ Calculate refund percentage
+      let refundPercentage: number | null = null;
+      let daysUntilEvent: number | null = null;
+
+      const refundAmount = Number(refund.refundAmount);
+      
+      // Get total amount from booking
+      let totalAmount: number | null = null;
+      let eventDate: Date | null = null;
+      let cancelledBy: string | null = null;
+
+      if (isTicketRefund && refund.ticketBooking) {
+        totalAmount = Number(refund.ticketBooking.totalAmount);
+        eventDate = refund.ticketBooking.event?.eventDate || null;
+        cancelledBy = 'CUSTOMER';
+      } else if (refund.vendorBooking) {
+        totalAmount = refund.vendorBooking.depositAmount 
+          ? Number(refund.vendorBooking.depositAmount)
+          : refund.vendorBooking.totalAmount 
+            ? Number(refund.vendorBooking.totalAmount)
+            : null;
+        eventDate = refund.vendorBooking.userSocialEvent?.eventDate || null;
+        cancelledBy = refund.vendorBooking.cancelledBy || null;
+      }
+
+      // ✅ 1. Check if percentage is in gatewayResponse
+      const gatewayResponse = refund.gatewayResponse as any;
+      if (gatewayResponse?.refundPercentage !== undefined && gatewayResponse?.refundPercentage !== null) {
+        refundPercentage = gatewayResponse.refundPercentage;
+      }
+
+      // ✅ 2. Calculate from amounts
+      if (refundPercentage === null && refundAmount && totalAmount && totalAmount > 0) {
+        refundPercentage = calculateRefundPercentageFromAmount(refundAmount, totalAmount);
+      }
+
+      // ✅ 3. For vendor declines, it's always 100%
+      if (refundPercentage === null && cancelledBy === 'VENDOR') {
+        refundPercentage = 100;
+      }
+
+      // ✅ 4. Calculate from days until event
+      if (refundPercentage === null && eventDate) {
+        const cancellationDate = refund.createdAt || new Date();
+        daysUntilEvent = calculateDaysUntilEvent(eventDate, cancellationDate);
+        refundPercentage = getRefundPercentageFromPolicy(daysUntilEvent);
+      }
+
+      // Build unified booking shape
       const booking = isTicketRefund
         ? {
             id: refund.ticketBooking?.id,
@@ -74,6 +140,10 @@ export async function GET() {
         processedAt: refund.processedAt,
         cancelledBy: refund.vendorBooking?.cancelledBy ?? null,
         cancellationReason: refund.vendorBooking?.cancellationReason ?? null,
+        // ✅ ADD: Refund percentage and related fields
+        refundPercentage,
+        daysUntilEvent,
+        totalAmount,
         booking,
         paymentTransaction: {
           id: refund.paymentTransaction?.id,

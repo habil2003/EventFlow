@@ -70,9 +70,17 @@ export default function OrganizerEventsPage() {
       try {
         const response = await fetch("/api/organizer/events");
         const data = await response.json();
-        setEvents(data);
+
+        if (Array.isArray(data)) {
+          setEvents(data);
+        } else if (data.events && Array.isArray(data.events)) {
+          setEvents(data.events);
+        } else {
+          setEvents([]);
+        }
       } catch (error) {
         console.error("Error fetching events:", error);
+        setEvents([]);
       } finally {
         setLoading(false);
       }
@@ -92,16 +100,24 @@ export default function OrganizerEventsPage() {
         method: "DELETE",
       });
 
+      const data = await response.json();
+
       if (response.ok) {
         setEvents(events.filter(e => e.id !== eventId));
         setShowDeleteModal(null);
         showMessage("Event deleted successfully", "success");
       } else {
-        showMessage("Failed to delete event", "error");
+        let errorMessage = "Failed to delete event";
+        if (data.error) {
+          errorMessage = data.error;
+        } else if (data.message) {
+          errorMessage = data.message;
+        }
+        showMessage(errorMessage, "error");
       }
     } catch (error) {
       console.error("Error deleting event:", error);
-      showMessage("Error deleting event", "error");
+      showMessage("An error occurred while deleting the event", "error");
     } finally {
       setActionLoading(null);
     }
@@ -143,7 +159,12 @@ export default function OrganizerEventsPage() {
         showMessage("Event marked as completed! Funds can now be released.", "success");
         const fetchResponse = await fetch("/api/organizer/events");
         const data = await fetchResponse.json();
-        setEvents(data);
+        
+        if (Array.isArray(data)) {
+          setEvents(data);
+        } else if (data.events && Array.isArray(data.events)) {
+          setEvents(data.events);
+        }
       } else {
         showMessage("Failed to mark event as completed", "error");
       }
@@ -252,10 +273,11 @@ export default function OrganizerEventsPage() {
                 ? (event.totalTicketsSold / event.capacity) * 100
                 : 0;
 
-              const formattedRevenue = event.totalRevenue.toLocaleString();
+              const formattedRevenue = (event.totalRevenue || 0).toLocaleString();
               const isEventActive = event.isActive !== false;
               const isCompleted = event.isCompleted === true;
               const isPast = new Date(event.eventDate) < new Date();
+              const hasBookings = event.totalTicketsSold > 0;
 
               return (
                 <motion.div
@@ -356,12 +378,9 @@ export default function OrganizerEventsPage() {
                       </div>
                     </div>
 
-                    {/* ============================================ */}
-                    {/* ACTION BUTTONS WITH CONDITIONAL VISIBILITY */}
-                    {/* ============================================ */}
+                    {/* Action Buttons */}
                     <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                      
-                      {/* ✅ Dashboard - Always visible */}
+
                       <Link
                         href={`/organizer/events/${event.id}`}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
@@ -369,8 +388,7 @@ export default function OrganizerEventsPage() {
                         <EyeIcon className="h-4 w-4 mr-1" />
                         Dashboard
                       </Link>
-                      
-                      {/* ✅ Edit - Always visible but disabled if completed */}
+
                       <Link
                         href={`/organizer/events/${event.id}/edit`}
                         className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
@@ -382,8 +400,7 @@ export default function OrganizerEventsPage() {
                         <PencilIcon className="h-4 w-4 mr-1" />
                         Edit
                       </Link>
-                      
-                      {/* ✅ Bookings - Always visible */}
+
                       <Link
                         href={`/organizer/events/${event.id}/bookings`}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
@@ -391,8 +408,7 @@ export default function OrganizerEventsPage() {
                         <ClipboardDocumentListIcon className="h-4 w-4 mr-1" />
                         Bookings ({event.totalTicketsSold || 0})
                       </Link>
-                      
-                      {/* ❌ Check-in - Hide if completed */}
+
                       {!isCompleted && (
                         <Link
                           href={`/organizer/checkin?eventId=${event.id}`}
@@ -402,8 +418,7 @@ export default function OrganizerEventsPage() {
                           Check-in
                         </Link>
                       )}
-                      
-                      {/* ✅ Sales - Always visible */}
+
                       <Link
                         href={`/organizer/sales?eventId=${event.id}`}
                         className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
@@ -411,8 +426,7 @@ export default function OrganizerEventsPage() {
                         <ChartBarIcon className="h-4 w-4 mr-1" />
                         Sales
                       </Link>
-                      
-                      {/* ❌ Deactivate - Hide if completed */}
+
                       {!isCompleted && (
                         <button
                           onClick={() => handleToggleStatus(event.id, isEventActive)}
@@ -426,20 +440,24 @@ export default function OrganizerEventsPage() {
                           {isEventActive ? "Deactivate" : "Activate"}
                         </button>
                       )}
-                      
-                      {/* ❌ Delete - Hide if completed */}
+
+                      {/* ✅ Delete button - Disabled if has bookings */}
                       {!isCompleted && (
                         <button
                           onClick={() => setShowDeleteModal(event.id)}
-                          disabled={actionLoading === event.id}
-                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                          disabled={actionLoading === event.id || hasBookings}
+                          className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                            hasBookings
+                              ? "text-gray-400 cursor-not-allowed opacity-50"
+                              : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30"
+                          }`}
+                          title={hasBookings ? "Cannot delete event with bookings" : "Delete event"}
                         >
                           <TrashIcon className="h-4 w-4 mr-1" />
                           Delete
                         </button>
                       )}
-                      
-                      {/* ❌ Mark Completed - Hide if completed, show only for active, past events */}
+
                       {!isCompleted && isPast && isEventActive && (
                         <button
                           onClick={() => handleMarkComplete(event.id)}
@@ -459,7 +477,7 @@ export default function OrganizerEventsPage() {
         )}
       </main>
 
-      {/* Delete Confirmation Modal */}
+      {/* ✅ Delete Confirmation Modal with Booking Check */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <motion.div
@@ -468,9 +486,31 @@ export default function OrganizerEventsPage() {
             className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 max-w-md mx-4"
           >
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Delete Event?</h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">
-              This action cannot be undone. This event and all its tickets will be permanently removed.
-            </p>
+            
+            {/* ✅ Check if event has bookings - with proper null check */}
+            {(() => {
+              const event = events.find(e => e.id === showDeleteModal);
+              // ✅ Proper null check: event && event.totalTicketsSold
+              const hasBookings = event && event.totalTicketsSold > 0;
+              
+              if (hasBookings) {
+                return (
+                  <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                      ⚠️ This event has {event.totalTicketsSold} ticket(s) sold. 
+                      You cannot delete an event with existing bookings.
+                    </p>
+                  </div>
+                );
+              }
+              
+              return (
+                <p className="text-gray-500 dark:text-gray-400 mb-6">
+                  This action cannot be undone. This event and all its tickets will be permanently removed.
+                </p>
+              );
+            })()}
+            
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowDeleteModal(null)}
@@ -478,13 +518,33 @@ export default function OrganizerEventsPage() {
               >
                 Cancel
               </button>
-              <button
-                onClick={() => handleDeleteEvent(showDeleteModal)}
-                disabled={actionLoading === showDeleteModal}
-                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {actionLoading === showDeleteModal ? "Deleting..." : "Delete"}
-              </button>
+              
+              {/* ✅ Disable delete button if event has bookings - with proper null check */}
+              {(() => {
+                const event = events.find(e => e.id === showDeleteModal);
+                const hasBookings = event && event.totalTicketsSold > 0;
+                
+                if (hasBookings) {
+                  return (
+                    <button
+                      disabled
+                      className="px-4 py-2 text-sm font-medium bg-gray-400 text-white rounded-lg cursor-not-allowed"
+                    >
+                      Cannot Delete
+                    </button>
+                  );
+                }
+                
+                return (
+                  <button
+                    onClick={() => handleDeleteEvent(showDeleteModal)}
+                    disabled={actionLoading === showDeleteModal}
+                    className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {actionLoading === showDeleteModal ? "Deleting..." : "Delete"}
+                  </button>
+                );
+              })()}
             </div>
           </motion.div>
         </div>

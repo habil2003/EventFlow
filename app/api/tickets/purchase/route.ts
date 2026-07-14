@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { initiateKhaltiPayment } from "@/lib/payment/khalti";
+import { getAppUrl } from "@/lib/app-url";
 
 // Generate unique ticket number with event prefix
 async function generateTicketNumber(eventId: string): Promise<string> {
@@ -71,6 +73,10 @@ function generateSimpleSignature(ticketId: string, eventId: string, userId: stri
 }
 
 export async function POST(request: Request) {
+  let createdTickets: any[] = [];
+  let paymentTransaction: any = null;
+  let transactionId: string = "";
+
   try {
     const session = await getServerSession(authOptions);
 
@@ -81,7 +87,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { eventId, tierId, quantity } = await request.json();
+    const { eventId, tierId, quantity, returnUrl } = await request.json();
 
     if (!eventId || !tierId || !quantity) {
       return NextResponse.json(
@@ -147,10 +153,12 @@ export async function POST(request: Request) {
     const price = Number(tier.price);
     const totalAmount = price * qty;
     
-    const transactionId = generateTransactionId();
+    transactionId = generateTransactionId();
 
+    // ✅ Step 1: Create tickets and transaction in a single transaction
     const result = await prisma.$transaction(async (prisma) => {
-      const paymentTransaction = await prisma.paymentTransaction.create({
+      // Create payment transaction
+      const transaction = await prisma.paymentTransaction.create({
         data: {
           transactionId: transactionId,
           amount: totalAmount,
@@ -162,12 +170,14 @@ export async function POST(request: Request) {
             eventId, 
             tierId, 
             quantity: qty,
-            userId: session.user.id 
+            userId: session.user.id,
+            returnUrl: returnUrl || '/my-tickets',
           },
         },
       });
 
-      const createdTickets = [];
+      // Create tickets
+      const tickets = [];
       const ticketNumbers = [];
       
       for (let i = 0; i < qty; i++) {
@@ -186,51 +196,131 @@ export async function POST(request: Request) {
             transactionId: `${transactionId}_${i + 1}`,
             qrCodeHash: qrCodeHash,
             paymentStatus: "PENDING",
-            paymentIntentId: paymentTransaction.id,
+            paymentIntentId: transaction.id,
           },
         });
         
-        createdTickets.push(ticket);
+        tickets.push(ticket);
         ticketNumbers.push(ticketNumber);
       }
 
-      // ✅ FIX: REMOVED soldCount increment - it will be done in payment-callback
-
       return {
-        paymentTransaction,
-        createdTickets,
-        ticketNumbers,
+        paymentTransaction: transaction,
+        createdTickets: tickets,
+        ticketNumbers: ticketNumbers,
       };
     });
+
+    paymentTransaction = result.paymentTransaction;
+    createdTickets = result.createdTickets;
 
     console.log(`✅ Created ${qty} ticket(s) for user ${session.user.email} for event ${event.title}`);
     console.log(`📋 Ticket numbers: ${result.ticketNumbers.join(', ')}`);
 
-    return NextResponse.json({
-      success: true,
-      requiresPayment: true,
-      paymentIntentId: result.paymentTransaction.id,
-      transactionId: transactionId,
+    // ✅ Step 2: Initiate payment with Khalti
+    const appUrl = getAppUrl(request);
+    const callbackUrl = `${appUrl}/api/tickets/payment-callback`;
+
+    console.log('📍 [purchase] Initiating Khalti payment...');
+    console.log('📍 [purchase] Callback URL:', callbackUrl);
+    console.log('📍 [purchase] Amount:', totalAmount);
+
+    const khaltiResult = await initiateKhaltiPayment({
       amount: totalAmount,
-      tickets: result.createdTickets.map(t => ({
-        id: t.id,
-        ticketNumber: t.ticketNumber,
-        qrCodeHash: t.qrCodeHash || '',
-        qrPayload: prepareQRPayload(
-          t.id,
-          eventId,
-          session.user.id,
-          t.qrCodeHash || ''
-        ),
-      })),
-      message: `Tickets created! Please complete payment to activate.`,
+      transactionId: transactionId,
+      returnUrl: callbackUrl,
+      websiteUrl: appUrl,
+      productName: `Ticket: ${event.title}`,
+      customerName: session.user.name || 'Customer',
+      customerEmail: session.user.email || '',
     });
+
+    console.log('📡 [purchase] Khalti Result:', khaltiResult);
+
+    // ✅ Step 3: Handle Khalti response
+    if (khaltiResult.success && khaltiResult.payment_url) {
+      // ✅ Store pidx in transaction
+      await prisma.paymentTransaction.update({
+        where: { id: paymentTransaction.id },
+        data: { pidx: khaltiResult.pidx },
+      });
+
+      console.log('✅ [purchase] Payment initiated successfully');
+      console.log('🔗 [purchase] Payment URL:', khaltiResult.payment_url);
+
+      return NextResponse.json({
+        success: true,
+        requiresPayment: true,
+        payment_url: khaltiResult.payment_url,
+        pidx: khaltiResult.pidx,
+        transactionId: transactionId,
+        paymentIntentId: paymentTransaction.id,
+        amount: totalAmount,
+        tickets: createdTickets.map(t => ({
+          id: t.id,
+          ticketNumber: t.ticketNumber,
+          qrCodeHash: t.qrCodeHash || '',
+          qrPayload: prepareQRPayload(
+            t.id,
+            eventId,
+            session.user.id,
+            t.qrCodeHash || ''
+          ),
+        })),
+        message: `Tickets created! Please complete payment to activate.`,
+      });
+      
+    } else {
+      // ❌ Step 4: Payment initiation FAILED - Clean up everything!
+      console.error('❌ [purchase] Khalti initiation failed:', khaltiResult.error);
+
+      // ✅ Delete all pending tickets and transaction
+      await prisma.$transaction(async (prisma) => {
+        // Delete tickets
+        await prisma.ticketBooking.deleteMany({
+          where: { paymentIntentId: paymentTransaction.id }
+        });
+        
+        // Delete payment transaction
+        await prisma.paymentTransaction.delete({
+          where: { id: paymentTransaction.id }
+        });
+      });
+
+      console.log(`🗑️ [purchase] Cleaned up ${createdTickets.length} pending tickets and transaction`);
+
+      return NextResponse.json({
+        success: false,
+        error: khaltiResult.error || "Payment initiation failed. Please try again.",
+        canRetry: true,
+        message: "Your tickets were not booked. Please try again.",
+      }, { status: 400 });
+    }
     
   } catch (error) {
-    console.error("❌ Error creating ticket order:", error);
+    console.error("❌ [purchase] Error:", error);
+
+    // ✅ Cleanup on any error
+    if (paymentTransaction) {
+      try {
+        await prisma.$transaction(async (prisma) => {
+          await prisma.ticketBooking.deleteMany({
+            where: { paymentIntentId: paymentTransaction.id }
+          });
+          await prisma.paymentTransaction.delete({
+            where: { id: paymentTransaction.id }
+          });
+        });
+        console.log(`🗑️ [purchase] Cleaned up pending tickets after error`);
+      } catch (cleanupError) {
+        console.error('❌ [purchase] Cleanup failed:', cleanupError);
+      }
+    }
+
     return NextResponse.json(
       { 
-        error: "Failed to process request",
+        error: "Failed to process request. Please try again.",
+        canRetry: true,
         message: process.env.NODE_ENV === 'development' ? String(error) : undefined
       },
       { status: 500 }

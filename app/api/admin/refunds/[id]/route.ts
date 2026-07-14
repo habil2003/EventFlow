@@ -3,6 +3,76 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// ✅ Helper: Calculate refund percentage from amount
+function calculateRefundPercentageFromAmount(refundAmount: number, totalAmount: number): number | null {
+  if (!totalAmount || totalAmount === 0) return null;
+  return Math.round((refundAmount / totalAmount) * 100);
+}
+
+// ✅ Helper: Calculate days until event
+function calculateDaysUntilEvent(eventDate: Date, cancellationDate: Date): number {
+  const diffTime = eventDate.getTime() - cancellationDate.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+// ✅ Helper: Get refund percentage based on days until event
+function getRefundPercentageFromPolicy(daysUntilEvent: number): number {
+  if (daysUntilEvent >= 7) return 100;
+  if (daysUntilEvent >= 3) return 50;
+  return 0;
+}
+
+// ✅ Helper: Calculate refund percentage for a refund
+function calculateRefundPercentage(refund: any): { percentage: number | null; daysUntilEvent: number | null } {
+  let refundPercentage: number | null = null;
+  let daysUntilEvent: number | null = null;
+
+  const refundAmount = Number(refund.refundAmount);
+  let totalAmount: number | null = null;
+  let eventDate: Date | null = null;
+  let cancelledBy: string | null = null;
+
+  // Get booking details
+  if (refund.vendorBooking) {
+    totalAmount = refund.vendorBooking.depositAmount 
+      ? Number(refund.vendorBooking.depositAmount)
+      : refund.vendorBooking.totalAmount 
+        ? Number(refund.vendorBooking.totalAmount)
+        : null;
+    eventDate = refund.vendorBooking.userSocialEvent?.eventDate || null;
+    cancelledBy = refund.vendorBooking.cancelledBy || null;
+  } else if (refund.ticketBooking) {
+    totalAmount = Number(refund.ticketBooking.totalAmount);
+    eventDate = refund.ticketBooking.event?.eventDate || null;
+    cancelledBy = 'CUSTOMER';
+  }
+
+  // ✅ 1. Check if percentage is already in gatewayResponse
+  const gatewayResponse = refund.gatewayResponse as any;
+  if (gatewayResponse?.refundPercentage !== undefined && gatewayResponse?.refundPercentage !== null) {
+    refundPercentage = gatewayResponse.refundPercentage;
+  }
+
+  // ✅ 2. Calculate from amounts
+  if (refundPercentage === null && refundAmount && totalAmount && totalAmount > 0) {
+    refundPercentage = calculateRefundPercentageFromAmount(refundAmount, totalAmount);
+  }
+
+  // ✅ 3. For vendor declines, it's always 100% of deposit
+  if (refundPercentage === null && cancelledBy === 'VENDOR') {
+    refundPercentage = 100;
+  }
+
+  // ✅ 4. Calculate from days until event
+  if (refundPercentage === null && eventDate) {
+    const cancellationDate = refund.createdAt || new Date();
+    daysUntilEvent = calculateDaysUntilEvent(eventDate, cancellationDate);
+    refundPercentage = getRefundPercentageFromPolicy(daysUntilEvent);
+  }
+
+  return { percentage: refundPercentage, daysUntilEvent };
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -22,14 +92,27 @@ export async function PATCH(
       where: { id },
       include: {
         paymentTransaction: true,
-        vendorBooking: true,
-        ticketBooking: true,
+        vendorBooking: {
+          include: {
+            vendor: true,
+            userSocialEvent: true,
+          },
+        },
+        ticketBooking: {
+          include: {
+            event: true,
+            tier: true,
+          },
+        },
       },
     });
 
     if (!refund) {
       return NextResponse.json({ error: 'Refund not found' }, { status: 404 });
     }
+
+    // ✅ Calculate refund percentage
+    const { percentage: refundPercentage, daysUntilEvent } = calculateRefundPercentage(refund);
 
     // Helper: mark the associated booking as refunded
     async function markBookingRefunded() {
@@ -69,6 +152,10 @@ export async function PATCH(
               adminNotes: notes,
               processedBy: session.user.email,
               processedAt: new Date().toISOString(),
+              // ✅ ADD: Refund percentage
+              refundPercentage,
+              daysUntilEvent,
+              refundAmount: Number(refund.refundAmount),
             },
           },
         });
@@ -97,7 +184,6 @@ export async function PATCH(
           Math.round(Number(refund.paymentTransaction?.amount) * 100);
 
         try {
-          // ✅ FIXED: transaction_id in URL path, amount in body for partial
           const khaltiUrl = `${
             process.env.NODE_ENV === 'production'
               ? 'https://khalti.com'
@@ -133,6 +219,9 @@ export async function PATCH(
                   adminNotes: notes,
                   processedBy: session.user.email,
                   attemptedAt: new Date().toISOString(),
+                  // ✅ ADD: Refund percentage even on failure
+                  refundPercentage,
+                  daysUntilEvent,
                 },
               },
             });
@@ -143,14 +232,11 @@ export async function PATCH(
             );
           }
 
-          // ✅ Khalti success response is just { detail: "Transaction refund successful." }
-          // No refund ID returned — we use the gateway transaction ID as our reference
           const updatedRefund = await prisma.refund.update({
             where: { id },
             data: {
               refundStatus: 'PROCESSED',
               processedAt: new Date(),
-              // Store the original gateway tx ID since Khalti returns no refund ID
               gatewayRefundId: `khalti_refund_${gatewayTxId}`,
               gatewayResponse: {
                 status: 'PROCESSED',
@@ -161,6 +247,10 @@ export async function PATCH(
                 adminNotes: notes,
                 processedBy: session.user.email,
                 processedAt: new Date().toISOString(),
+                // ✅ ADD: Refund percentage
+                refundPercentage,
+                daysUntilEvent,
+                refundAmount: Number(refund.refundAmount),
               },
             },
           });
@@ -187,6 +277,9 @@ export async function PATCH(
                 adminNotes: notes,
                 processedBy: session.user.email,
                 attemptedAt: new Date().toISOString(),
+                // ✅ ADD: Refund percentage even on failure
+                refundPercentage,
+                daysUntilEvent,
               },
             },
           });
@@ -210,6 +303,10 @@ export async function PATCH(
             adminNotes: notes,
             processedBy: session.user.email,
             processedAt: new Date().toISOString(),
+            // ✅ ADD: Refund percentage
+            refundPercentage,
+            daysUntilEvent,
+            refundAmount: Number(refund.refundAmount),
           },
         },
       });
@@ -229,6 +326,9 @@ export async function PATCH(
             adminNotes: notes,
             processedBy: session.user.email,
             updatedAt: new Date().toISOString(),
+            // ✅ ADD: Refund percentage
+            refundPercentage,
+            daysUntilEvent,
           },
         },
       });
@@ -246,6 +346,9 @@ export async function PATCH(
           adminNotes: notes,
           processedBy: session.user.email,
           updatedAt: new Date().toISOString(),
+          // ✅ ADD: Refund percentage
+          refundPercentage,
+          daysUntilEvent,
         },
       },
     });

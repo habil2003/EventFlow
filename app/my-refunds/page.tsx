@@ -8,21 +8,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeftIcon,
   BanknotesIcon,
-  BuildingOfficeIcon,
   CalendarIcon,
   CheckCircleIcon,
   ClockIcon,
-  CurrencyRupeeIcon,
-  DocumentTextIcon,
-  EyeIcon,
   XCircleIcon,
-  ArrowPathIcon,
-  UserIcon,
-  MagnifyingGlassIcon,
+  EyeIcon,
   ChevronRightIcon,
-  InformationCircleIcon,
-  ShieldCheckIcon,
-  ChartBarIcon,
+  BuildingOfficeIcon,
+  UserIcon,
+  ReceiptRefundIcon,
+  ArrowPathIcon,
+  CreditCardIcon,
+  AcademicCapIcon,
 } from "@heroicons/react/24/outline";
 
 interface RefundRecord {
@@ -37,117 +34,158 @@ interface RefundRecord {
   refundAmount: number;
   refundStatus: string;
   refundMethod: string | null;
-  refundReference: string | null;
-  refundProcessedBy: string | null;
-  refundProcessedAt: string | null;
   refundPercentage: number | null;
-  refundKhaltiFee?: number | null;
-  refundPlatformKeeps?: number | null;
-  refundReason: string | null;
   cancelledBy: string | null;
   cancellationReason: string | null;
-  daysUntilEvent?: number | null;
   createdAt: string;
   processedAt: string | null;
-  gatewayResponse?: any;
 }
 
-// Helper function to format refund details based on type
-function formatRefundDetails(gatewayResponse: any, refundStatus: string, refundMethod: string | null, refundPercentage: number | null, daysUntilEvent: number | null) {
-  if (!gatewayResponse && refundStatus === "PROCESSED") {
-    // Fallback for when gatewayResponse is missing but refund is processed
+// Helper: Get status config
+const getStatusConfig = (status: string) => {
+  switch (status) {
+    case "PROCESSED":
+      return {
+        label: "Completed",
+        color: "emerald",
+        icon: CheckCircleIcon,
+        bg: "bg-emerald-50 dark:bg-emerald-900/20",
+        text: "text-emerald-700 dark:text-emerald-300",
+        border: "border-emerald-200 dark:border-emerald-800",
+        dot: "bg-emerald-500",
+      };
+    case "PENDING_ADMIN":
+      return {
+        label: "Processing",
+        color: "amber",
+        icon: ClockIcon,
+        bg: "bg-amber-50 dark:bg-amber-900/20",
+        text: "text-amber-700 dark:text-amber-300",
+        border: "border-amber-200 dark:border-amber-800",
+        dot: "bg-amber-500 animate-pulse",
+      };
+    case "FAILED":
+      return {
+        label: "Failed",
+        color: "rose",
+        icon: XCircleIcon,
+        bg: "bg-rose-50 dark:bg-rose-900/20",
+        text: "text-rose-700 dark:text-rose-300",
+        border: "border-rose-200 dark:border-rose-800",
+        dot: "bg-rose-500",
+      };
+    default:
+      return {
+        label: status,
+        color: "gray",
+        icon: ClockIcon,
+        bg: "bg-gray-50 dark:bg-gray-800",
+        text: "text-gray-700 dark:text-gray-300",
+        border: "border-gray-200 dark:border-gray-700",
+        dot: "bg-gray-400",
+      };
+  }
+};
+
+// ✅ Helper: Get refund method config - NO FALLBACKS
+const getMethodConfig = (method: string | null) => {
+  // ✅ If method is null, show "Not Available" - NOT a fallback
+  if (!method) {
     return {
-      type: "BASIC",
-      title: "Refund Processed",
-      details: [
-        { label: "Refund Amount", value: refundPercentage ? `${refundPercentage}% of total` : null },
-        { label: "Status", value: "Completed" },
-      ].filter(d => d.value)
+      label: "Not Available",
+      icon: XCircleIcon,
+      color: "gray",
+      bg: "bg-gray-50 dark:bg-gray-700/30",
+      text: "text-gray-500 dark:text-gray-400",
+      border: "border-gray-200 dark:border-gray-700",
     };
   }
 
-  // For PROCESSED refunds
-  if (refundStatus === "PROCESSED") {
-    // Khalti API Auto-Refund
-    if (refundMethod === "KHALTI_API") {
+  // ✅ Only map real methods from the database
+  switch (method) {
+    case "KHALTI_API":
       return {
-        type: "API",
-        title: "Auto-Refund via Khalti API",
-        icon: BanknotesIcon,
+        label: "Auto-Refund (Khalti API)",
+        icon: CreditCardIcon,
         color: "purple",
-        details: [
-          { label: "Processed by", value: gatewayResponse?.processedBy || "System" },
-          { label: "Processed at", value: gatewayResponse?.processedAt ? new Date(gatewayResponse.processedAt).toLocaleString() : null },
-          { label: "Refund Percentage", value: refundPercentage ? `${refundPercentage}%` : null },
-          { label: "Days Until Event", value: daysUntilEvent ? `${daysUntilEvent} days before event` : null },
-          { label: "Khalti Fee", value: gatewayResponse?.khaltiFee ? `NPR ${gatewayResponse.khaltiFee.toLocaleString()}` : null },
-          { label: "Transaction ID", value: gatewayResponse?.originalTxId || gatewayResponse?.refundId },
-          { label: "API Response", value: gatewayResponse?.khaltiResponse?.detail || gatewayResponse?.message },
-        ].filter(d => d.value)
+        bg: "bg-purple-50 dark:bg-purple-900/20",
+        text: "text-purple-700 dark:text-purple-300",
+        border: "border-purple-200 dark:border-purple-800",
       };
-    }
-    
-    // Manual Refund (Bank, Cash, Cheque, etc.)
-    if (refundMethod === "MANUAL" || ["BANK_TRANSFER", "CASH", "CHEQUE", "KHALTI_MANUAL"].includes(refundMethod || "")) {
-      const methodNames: Record<string, string> = {
-        "BANK_TRANSFER": "Bank Transfer",
-        "CASH": "Cash",
-        "CHEQUE": "Cheque",
-        "KHALTI_MANUAL": "Khalti Dashboard",
-        "MANUAL": "Manual"
-      };
-      
+    case "BANK_TRANSFER":
       return {
-        type: "MANUAL",
-        title: `Manual Refund: ${methodNames[refundMethod || "MANUAL"]}`,
+        label: "Bank Transfer",
         icon: BuildingOfficeIcon,
         color: "blue",
-        details: [
-          { label: "Reference Number", value: gatewayResponse?.transactionReference || gatewayResponse?.refundId || 'N/A' },
-          { label: "Processed by", value: gatewayResponse?.processedBy || "Admin" },
-          { label: "Processed at", value: gatewayResponse?.processedAt ? new Date(gatewayResponse.processedAt).toLocaleString() : null },
-          { label: "Refund Percentage", value: refundPercentage ? `${refundPercentage}%` : null },
-          { label: "Notes", value: gatewayResponse?.adminNotes },
-        ].filter(d => d.value)
+        bg: "bg-blue-50 dark:bg-blue-900/20",
+        text: "text-blue-700 dark:text-blue-300",
+        border: "border-blue-200 dark:border-blue-800",
       };
-    }
+    case "KHALTI_MANUAL":
+      return {
+        label: "Khalti Dashboard",
+        icon: BanknotesIcon,
+        color: "green",
+        bg: "bg-green-50 dark:bg-green-900/20",
+        text: "text-green-700 dark:text-green-300",
+        border: "border-green-200 dark:border-green-800",
+      };
+    case "CASH":
+      return {
+        label: "Cash Refund",
+        icon: BanknotesIcon,
+        color: "yellow",
+        bg: "bg-yellow-50 dark:bg-yellow-900/20",
+        text: "text-yellow-700 dark:text-yellow-300",
+        border: "border-yellow-200 dark:border-yellow-800",
+      };
+    case "CHEQUE":
+      return {
+        label: "Cheque Refund",
+        icon: AcademicCapIcon,
+        color: "indigo",
+        bg: "bg-indigo-50 dark:bg-indigo-900/20",
+        text: "text-indigo-700 dark:text-indigo-300",
+        border: "border-indigo-200 dark:border-indigo-800",
+      };
+    case "MANUAL":
+      return {
+        label: "Manual Refund",
+        icon: BuildingOfficeIcon,
+        color: "gray",
+        bg: "bg-gray-50 dark:bg-gray-700/30",
+        text: "text-gray-700 dark:text-gray-300",
+        border: "border-gray-200 dark:border-gray-700",
+      };
+    default:
+      return {
+        label: `Unknown: ${method}`,
+        icon: XCircleIcon,
+        color: "red",
+        bg: "bg-red-50 dark:bg-red-900/20",
+        text: "text-red-700 dark:text-red-300",
+        border: "border-red-200 dark:border-red-800",
+      };
   }
+};
 
-  // For PENDING_ADMIN refunds
-  if (refundStatus === "PENDING_ADMIN") {
-    return {
-      type: "PENDING",
-      title: "Pending Admin Review",
-      icon: ClockIcon,
-      color: "yellow",
-      details: [
-        { label: "Refund Amount", value: `NPR ${gatewayResponse?.refundAmount?.toLocaleString() || "Pending"}` },
-        { label: "Refund Percentage", value: refundPercentage ? `${refundPercentage}%` : null },
-        { label: "Days Until Event", value: daysUntilEvent ? `${daysUntilEvent} days before event` : null },
-        { label: "Status", value: "Waiting for admin approval" },
-        { label: "Expected Timeline", value: "3-7 business days" },
-      ].filter(d => d.value)
-    };
-  }
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString("en-NP", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
 
-  // For FAILED refunds
-  if (refundStatus === "FAILED") {
-    return {
-      type: "FAILED",
-      title: "Refund Failed",
-      icon: XCircleIcon,
-      color: "red",
-      details: [
-        { label: "Error", value: gatewayResponse?.error || gatewayResponse?.message || "Unknown error" },
-        { label: "Attempted at", value: gatewayResponse?.attemptedAt ? new Date(gatewayResponse.attemptedAt).toLocaleString() : null },
-        { label: "Processed by", value: gatewayResponse?.processedBy },
-        { label: "Admin Notes", value: gatewayResponse?.adminNotes },
-      ].filter(d => d.value)
-    };
-  }
-
-  return null;
-}
+const formatDateTime = (dateString: string) => {
+  return new Date(dateString).toLocaleString("en-NP", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 export default function MyRefundsPage() {
   const { data: session, status } = useSession();
@@ -157,8 +195,7 @@ export default function MyRefundsPage() {
   const [selectedRefund, setSelectedRefund] = useState<RefundRecord | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "PROCESSED" | "PENDING_ADMIN" | "FAILED">("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showPolicyInfo, setShowPolicyInfo] = useState(false);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -181,129 +218,6 @@ export default function MyRefundsPage() {
     fetchRefunds();
   }, []);
 
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case "PROCESSED":
-        return {
-          text: "Completed",
-          badgeColor: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-          iconColor: "text-green-600",
-          bgColor: "bg-green-50 dark:bg-green-900/20",
-          borderColor: "border-green-200 dark:border-green-800",
-          icon: CheckCircleIcon,
-        };
-      case "PENDING_ADMIN":
-        return {
-          text: "Processing",
-          badgeColor: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-          iconColor: "text-yellow-600",
-          bgColor: "bg-yellow-50 dark:bg-yellow-900/20",
-          borderColor: "border-yellow-200 dark:border-yellow-800",
-          icon: ClockIcon,
-        };
-      case "FAILED":
-        return {
-          text: "Failed",
-          badgeColor: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-          iconColor: "text-red-600",
-          bgColor: "bg-red-50 dark:bg-red-900/20",
-          borderColor: "border-red-200 dark:border-red-800",
-          icon: XCircleIcon,
-        };
-      default:
-        return {
-          text: status,
-          badgeColor: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
-          iconColor: "text-gray-500",
-          bgColor: "bg-gray-50 dark:bg-gray-800",
-          borderColor: "border-gray-200 dark:border-gray-700",
-          icon: ClockIcon,
-        };
-    }
-  };
-
-  const getMethodConfig = (method: string | null) => {
-    switch (method) {
-      case "KHALTI_API":
-        return {
-          label: "Auto-Refund (Khalti API)",
-          icon: BanknotesIcon,
-          color: "purple",
-        };
-      case "BANK_TRANSFER":
-        return {
-          label: "Bank Transfer",
-          icon: BuildingOfficeIcon,
-          color: "blue",
-        };
-      case "KHALTI_MANUAL":
-        return {
-          label: "Khalti Dashboard Refund",
-          icon: BanknotesIcon,
-          color: "green",
-        };
-      case "CASH":
-        return {
-          label: "Cash Refund",
-          icon: CurrencyRupeeIcon,
-          color: "orange",
-        };
-      case "CHEQUE":
-        return {
-          label: "Cheque Refund",
-          icon: DocumentTextIcon,
-          color: "purple",
-        };
-      default:
-        return {
-          label: "Manual Refund",
-          icon: DocumentTextIcon,
-          color: "gray",
-        };
-    }
-  };
-
-  const getCancelledByInfo = (cancelledBy: string | null) => {
-    if (cancelledBy === "CUSTOMER") {
-      return { text: "You cancelled this booking", icon: UserIcon, color: "orange" };
-    }
-    if (cancelledBy === "VENDOR") {
-      return { text: "Vendor declined the booking", icon: BuildingOfficeIcon, color: "red" };
-    }
-    return null;
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-NP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-NP", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const filteredRefunds = refunds.filter((refund) => {
-    if (filter !== "all" && refund.refundStatus !== filter) return false;
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        refund.vendorName.toLowerCase().includes(searchLower) ||
-        refund.eventTitle.toLowerCase().includes(searchLower) ||
-        refund.packageName.toLowerCase().includes(searchLower)
-      );
-    }
-    return true;
-  });
-
   const stats = {
     total: refunds.length,
     processed: refunds.filter((r) => r.refundStatus === "PROCESSED").length,
@@ -312,343 +226,248 @@ export default function MyRefundsPage() {
     totalAmount: refunds.reduce((sum, r) => sum + r.refundAmount, 0),
   };
 
+  const filteredRefunds = refunds.filter((refund) => {
+    if (filter !== "all" && refund.refundStatus !== filter) return false;
+    return true;
+  });
+
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
-          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Loading your refunds...</p>
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-3 text-sm text-gray-500">Loading your refunds...</p>
         </div>
       </div>
     );
   }
 
-  if (!session || session.user?.role !== "USER") {
-    return null;
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        
-        {/* Header with Back Button */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard"
-                className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                <ArrowLeftIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-              </Link>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <BanknotesIcon className="h-8 w-8 text-purple-600" />
-                  My Refunds
-                </h1>
-                <p className="mt-2 text-gray-500 dark:text-gray-400">
-                  Track the status of your refund requests
-                </p>
-              </div>
-            </div>
-            
-            {/* Refund Policy Info Button */}
-            <button
-              onClick={() => setShowPolicyInfo(!showPolicyInfo)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* ===== HEADER ===== */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="p-2 rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all hover:shadow-md"
             >
-              <InformationCircleIcon className="h-5 w-5" />
-              <span className="text-sm font-medium">Refund Policy</span>
-            </button>
+              <ArrowLeftIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <ReceiptRefundIcon className="h-7 w-7 text-indigo-600" />
+                Refunds
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Track your refund requests and status
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="px-3 py-1.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
+              <span className="text-gray-500 dark:text-gray-400">Total Refunded:</span>
+              <span className="ml-1 font-semibold text-indigo-600 dark:text-indigo-400">
+                NPR {stats.totalAmount.toLocaleString()}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Refund Policy Info Panel */}
-        <AnimatePresence>
-          {showPolicyInfo && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mb-6 overflow-hidden"
-            >
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-5">
-                <div className="flex items-start gap-3">
-                  <ShieldCheckIcon className="h-6 w-6 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Refund Policy</h3>
-                    <div className="space-y-3 text-sm text-blue-700 dark:text-blue-300">
-                      <p>Refund amounts are calculated based on when you cancel relative to the event date:</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center border border-green-200 dark:border-green-800">
-                          <div className="text-2xl font-bold text-green-600">100%</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">7+ days before event</div>
-                          <div className="text-xs text-green-600 mt-1">Full refund</div>
-                        </div>
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center border border-yellow-200 dark:border-yellow-800">
-                          <div className="text-2xl font-bold text-yellow-600">50%</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">3-6 days before event</div>
-                          <div className="text-xs text-yellow-600 mt-1">Partial refund</div>
-                        </div>
-                        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center border border-red-200 dark:border-red-800">
-                          <div className="text-2xl font-bold text-red-600">0%</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Less than 3 days</div>
-                          <div className="text-xs text-red-600 mt-1">No refund</div>
-                        </div>
-                      </div>
-                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-3">
-                        Note: Khalti payment gateway fees are non-refundable. The platform fee is also non-refundable.
-                        For vendor declines, you receive a 100% refund of the deposit paid.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+        {/* ===== STATS CARDS ===== */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Refunds</p>
-                <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{stats.total}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.total}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Total Refunds</p>
               </div>
               <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <DocumentTextIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <ReceiptRefundIcon className="h-5 w-5 text-indigo-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Completed</p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-500">{stats.processed}</p>
+                <p className="text-2xl font-bold text-emerald-600">{stats.processed}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Completed</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-500" />
+              <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <CheckCircleIcon className="h-5 w-5 text-emerald-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Processing</p>
-                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">{stats.pending}</p>
+                <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Processing</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                <ClockIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-500" />
+              <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <ClockIcon className="h-5 w-5 text-amber-600" />
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Failed</p>
-                <p className="text-2xl font-bold text-red-600 dark:text-red-500">{stats.failed}</p>
+                <p className="text-2xl font-bold text-rose-600">{stats.failed}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Failed</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <XCircleIcon className="h-5 w-5 text-red-600 dark:text-red-500" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm border border-purple-100 dark:border-purple-800 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-purple-600 dark:text-purple-400">Total Refunded</p>
-                <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
-                  NPR {stats.totalAmount.toLocaleString()}
-                </p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <CurrencyRupeeIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="h-10 w-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                <XCircleIcon className="h-5 w-5 text-rose-600" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Search and Filter Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by vendor, event, or package..."
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: "all", label: "All", count: stats.total },
-              { value: "PROCESSED", label: "Completed", count: stats.processed },
-              { value: "PENDING_ADMIN", label: "Processing", count: stats.pending },
-              { value: "FAILED", label: "Failed", count: stats.failed },
-            ].map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setFilter(option.value as any)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  filter === option.value
-                    ? "bg-indigo-600 text-white"
-                    : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                }`}
-              >
-                {option.label} ({option.count})
-              </button>
-            ))}
-          </div>
+        {/* ===== FILTER TABS ===== */}
+        <div className="flex flex-wrap gap-1.5 mb-6">
+          {[
+            { value: "all", label: "All", count: stats.total },
+            { value: "PROCESSED", label: "Completed", count: stats.processed },
+            { value: "PENDING_ADMIN", label: "Processing", count: stats.pending },
+            { value: "FAILED", label: "Failed", count: stats.failed },
+          ].map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setFilter(tab.value as any)}
+              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                filter === tab.value
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700"
+              }`}
+            >
+              {tab.label}
+              <span className={`ml-1.5 text-xs ${filter === tab.value ? "text-white/70" : "text-gray-400"}`}>
+                ({tab.count})
+              </span>
+            </button>
+          ))}
         </div>
 
-        {/* Refunds List */}
+        {/* ===== REFUNDS LIST ===== */}
         {filteredRefunds.length === 0 ? (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-12 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="flex flex-col items-center">
-              <div className="h-20 w-20 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
-                <BanknotesIcon className="h-10 w-10 text-gray-400" />
+              <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
+                <ReceiptRefundIcon className="h-8 w-8 text-gray-400" />
               </div>
-              <p className="text-gray-500 dark:text-gray-400 text-lg">No refunds found</p>
+              <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">No refunds found</p>
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                {searchTerm || filter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "Refunds from cancelled bookings will appear here"}
+                {filter !== "all" ? "Try changing the filter" : "Refunds will appear here when processed"}
               </p>
-              <Link
-                href="/my-bookings"
-                className="mt-4 inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                View My Bookings
-              </Link>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {filteredRefunds.map((refund, index) => {
-              const StatusConfig = getStatusConfig(refund.refundStatus);
-              const StatusIcon = StatusConfig.icon;
-              const MethodInfo = getMethodConfig(refund.refundMethod);
-              const CancelledInfo = getCancelledByInfo(refund.cancelledBy);
-              const isProcessed = refund.refundStatus === "PROCESSED";
-              const isPending = refund.refundStatus === "PENDING_ADMIN";
+              const Status = getStatusConfig(refund.refundStatus);
+              const StatusIcon = Status.icon;
+              const Method = getMethodConfig(refund.refundMethod);
+              const isProcessing = refund.refundStatus === "PENDING_ADMIN";
+              const isCompleted = refund.refundStatus === "PROCESSED";
 
               return (
                 <motion.div
                   key={refund.id}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  whileHover={{ y: -2 }}
-                  className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all duration-200"
+                  onMouseEnter={() => setHoveredCard(refund.id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
                 >
-                  <div className="p-5">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                      {/* Left Section - Main Info */}
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between flex-wrap gap-2">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                {refund.vendorName}
-                              </h3>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${StatusConfig.badgeColor}`}>
-                                <StatusIcon className="h-3 w-3 mr-1" />
-                                {StatusConfig.text}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                              {refund.packageName}
-                            </p>
-                          </div>
-                        </div>
+                  <div className="p-4">
+                    <div className="flex items-start gap-4">
+                      {/* Status Dot */}
+                      <div className="flex-shrink-0 pt-1">
+                        <div className={`h-3 w-3 rounded-full ${Status.dot}`} />
+                      </div>
 
-                        <div className="flex flex-wrap gap-4 mt-3">
-                          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                            <CalendarIcon className="h-4 w-4 mr-1 text-indigo-500" />
-                            {formatDate(refund.eventDate)}
-                          </div>
-                          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                            <BanknotesIcon className="h-4 w-4 mr-1 text-indigo-500" />
-                            Refund Received: <span className="font-semibold text-green-600 dark:text-green-400 ml-1">NPR {refund.refundAmount.toLocaleString()}</span>
-                          </div>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        {/* Top Row: Vendor & Status */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                            {refund.vendorName}
+                          </h3>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${Status.bg} ${Status.text}`}>
+                            <StatusIcon className="h-3 w-3" />
+                            {Status.label}
+                          </span>
                           {refund.refundPercentage !== null && (
-                            <div className="flex items-center text-sm">
-                              <ChartBarIcon className="h-4 w-4 mr-1 text-indigo-500" />
-                              <span className="text-gray-600 dark:text-gray-300">
-                                {refund.refundPercentage}% of amount paid
-                              </span>
-                            </div>
+                            <span className={`text-xs font-medium ${refund.refundPercentage >= 80 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                              {refund.refundPercentage}% refund
+                            </span>
                           )}
                         </div>
 
-                        <div className="mt-2">
-                          <p className="text-sm text-gray-600 dark:text-gray-300">
-                            <span className="text-gray-500">Event:</span> {refund.eventTitle}
-                          </p>
+                        {/* Event & Package */}
+                        <p className="text-sm text-gray-600 dark:text-gray-300 mt-0.5 truncate">
+                          {refund.eventTitle} · <span className="text-gray-500 dark:text-gray-400">{refund.packageName}</span>
+                        </p>
+
+                        {/* Meta Row with Gateway Method */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <CalendarIcon className="h-3 w-3" />
+                            {formatDate(refund.eventDate)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <BanknotesIcon className="h-3 w-3" />
+                            NPR {refund.refundAmount.toLocaleString()}
+                          </span>
+                          {/* ✅ Show Gateway Method - Real data only */}
+                          {isCompleted && (
+                            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${Method.bg} ${Method.text} border ${Method.border}`}>
+                              <Method.icon className="h-3 w-3" />
+                              {Method.label}
+                            </span>
+                          )}
+                          {refund.cancelledBy && (
+                            <span className="flex items-center gap-1 text-gray-400">
+                              <UserIcon className="h-3 w-3" />
+                              {refund.cancelledBy === "VENDOR" ? "Vendor declined" : "Cancelled by you"}
+                            </span>
+                          )}
                         </div>
 
-                        {/* Refund Percentage Badge */}
-                        {refund.refundPercentage !== null && refund.refundPercentage > 0 && (
-                          <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                            <CheckCircleIcon className="h-3 w-3" />
-                            {refund.refundPercentage}% Refund Issued
-                          </div>
-                        )}
-
-                        {/* Cancellation Info */}
-                        {CancelledInfo && (
-                          <div className="mt-2 flex items-center gap-1">
-                            <CancelledInfo.icon className={`h-3 w-3 text-${CancelledInfo.color}-500`} />
-                            <p className={`text-xs text-${CancelledInfo.color}-600 dark:text-${CancelledInfo.color}-400`}>
-                              {CancelledInfo.text}
-                            </p>
-                            {refund.cancellationReason && (
-                              <span className="text-xs text-gray-400 ml-1">
-                                • Reason: {refund.cancellationReason}
-                              </span>
-                            )}
-                          </div>
+                        {/* Cancellation reason */}
+                        {refund.cancellationReason && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 truncate">
+                            💬 {refund.cancellationReason}
+                          </p>
                         )}
                       </div>
 
-                      {/* Right Section - Action */}
-                      <div className="flex flex-col items-end gap-2 min-w-[140px]">
-                        <div className="text-right">
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Requested on</p>
-                          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {formatDate(refund.createdAt)}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setSelectedRefund(refund);
-                            setModalOpen(true);
-                          }}
-                          className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-sm font-medium transition-colors w-full"
-                        >
-                          <EyeIcon className="h-4 w-4" />
-                          View Details
-                          <ChevronRightIcon className="h-4 w-4" />
-                        </button>
-                      </div>
+                      {/* Action Button */}
+                      <button
+                        onClick={() => {
+                          setSelectedRefund(refund);
+                          setModalOpen(true);
+                        }}
+                        className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 text-sm text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                      >
+                        <EyeIcon className="h-4 w-4" />
+                        <span className="hidden sm:inline">Details</span>
+                        <ChevronRightIcon className="h-3 w-3" />
+                      </button>
                     </div>
 
-                    {/* Progress Timeline for Processing Status */}
-                    {isPending && (
-                      <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <ArrowPathIcon className="h-4 w-4 text-yellow-600 animate-spin" />
-                            <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
-                              Refund in Progress
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-400">3-7 business days</span>
+                    {/* Progress Bar for Processing */}
+                    {isProcessing && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                            <ArrowPathIcon className="h-3 w-3 animate-spin" />
+                            Processing refund...
+                          </span>
+                          <span className="text-gray-400">3-7 business days</span>
                         </div>
-                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                          <div className="bg-yellow-600 h-1.5 rounded-full w-2/3 animate-pulse"></div>
+                        <div className="mt-1.5 w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div className="h-full w-2/3 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full animate-pulse" />
                         </div>
                       </div>
                     )}
@@ -658,227 +477,165 @@ export default function MyRefundsPage() {
             })}
           </div>
         )}
-      </main>
+      </div>
 
-      {/* Refund Details Modal */}
+      {/* ===== REFUND DETAIL MODAL ===== */}
       <AnimatePresence>
         {modalOpen && selectedRefund && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-              <div
-                className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-90 transition-opacity"
-                onClick={() => setModalOpen(false)}
-              />
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="relative inline-block transform overflow-hidden rounded-xl bg-white dark:bg-gray-800 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle"
-              >
-                <div className="bg-white dark:bg-gray-800">
-                  {/* Modal Header */}
-                  <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
-                        <DocumentTextIcon className="h-5 w-5 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-white">Refund Details</h3>
-                        <p className="text-xs text-purple-100">Reference: {selectedRefund.id.slice(0, 8)}...</p>
-                      </div>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                      <ReceiptRefundIcon className="h-5 w-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Refund Details</h3>
+                      <p className="text-xs text-gray-400">#{selectedRefund.id.slice(0, 8)}</p>
                     </div>
                   </div>
-
-                  {/* Modal Body */}
-                  <div className="px-6 py-5">
-                    {/* Status Banner */}
-                    <div className={`mb-5 p-4 rounded-lg ${getStatusConfig(selectedRefund.refundStatus).bgColor} border ${getStatusConfig(selectedRefund.refundStatus).borderColor}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-full bg-white dark:bg-gray-800 shadow-sm`}>
-                          {selectedRefund.refundStatus === "PROCESSED" && <CheckCircleIcon className={`h-5 w-5 text-green-600`} />}
-                          {selectedRefund.refundStatus === "PENDING_ADMIN" && <ClockIcon className={`h-5 w-5 text-yellow-600`} />}
-                          {selectedRefund.refundStatus === "FAILED" && <XCircleIcon className={`h-5 w-5 text-red-600`} />}
-                        </div>
-                        <div>
-                          <p className={`font-semibold ${getStatusConfig(selectedRefund.refundStatus).iconColor}`}>
-                            {selectedRefund.refundStatus === "PROCESSED" && "Refund Completed Successfully"}
-                            {selectedRefund.refundStatus === "PENDING_ADMIN" && "Refund is Being Processed"}
-                            {selectedRefund.refundStatus === "FAILED" && "Refund Failed"}
-                          </p>
-                          {selectedRefund.refundStatus === "PENDING_ADMIN" && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              Your refund will reflect in your account within 3-7 business days.
-                            </p>
-                          )}
-                          {selectedRefund.refundStatus === "PROCESSED" && selectedRefund.refundProcessedAt && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              Processed on {formatDateTime(selectedRefund.refundProcessedAt)}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Two Column Layout */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Left Column */}
-                      <div className="space-y-4">
-                        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Booking Details</p>
-                          <p className="font-medium text-gray-900 dark:text-white mt-1">{selectedRefund.vendorName}</p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{selectedRefund.packageName}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{selectedRefund.eventTitle}</p>
-                        </div>
-
-                        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Event Date</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <CalendarIcon className="h-4 w-4 text-indigo-500" />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">
-                              {formatDate(selectedRefund.eventDate)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {selectedRefund.cancelledBy && (
-                          <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
-                            <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Cancellation</p>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                              {selectedRefund.cancelledBy === "CUSTOMER" ? "Cancelled by you" : "Declined by vendor"}
-                            </p>
-                            {selectedRefund.cancellationReason && (
-                              <p className="text-xs text-gray-500 mt-1">Reason: {selectedRefund.cancellationReason}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right Column */}
-                      <div className="space-y-4">
-                        {/* Refund Amount Breakdown */}
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-3 border border-green-200 dark:border-green-800">
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Refund Summary</p>
-                          
-                          {/* Refund Percentage */}
-                          {selectedRefund.refundPercentage !== null && (
-                            <div className="flex justify-between items-center mt-2 pt-1">
-                              <span className="text-sm text-gray-600 dark:text-gray-400">Refund Percentage:</span>
-                              <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                                {selectedRefund.refundPercentage}%
-                              </span>
-                            </div>
-                          )}
-                          
-                          {/* Refund Amount */}
-                          <div className="flex justify-between items-center mt-1">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Amount Refunded:</span>
-                            <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                              NPR {selectedRefund.refundAmount.toLocaleString()}
-                            </span>
-                          </div>
-
-                          {/* Khalti Fee Deduction (if applicable) */}
-                          {selectedRefund.refundKhaltiFee && selectedRefund.refundKhaltiFee > 0 && (
-                            <div className="flex justify-between items-center mt-1 pt-1 border-t border-green-200 dark:border-green-800">
-                              <span className="text-xs text-gray-500 dark:text-gray-400">Khalti Fee (non-refundable):</span>
-                              <span className="text-xs text-red-500">- NPR {selectedRefund.refundKhaltiFee.toLocaleString()}</span>
-                            </div>
-                          )}
-
-                          {/* Platform Keeps (if applicable) */}
-                          {selectedRefund.refundPlatformKeeps && selectedRefund.refundPlatformKeeps > 0 && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs text-gray-500 dark:text-gray-400">Platform Fee (non-refundable):</span>
-                              <span className="text-xs text-red-500">- NPR {selectedRefund.refundPlatformKeeps.toLocaleString()}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Refund Method Details - Using formatRefundDetails helper */}
-                        {(selectedRefund.refundStatus === "PROCESSED" || selectedRefund.refundStatus === "PENDING_ADMIN" || selectedRefund.refundStatus === "FAILED") && (
-                          (() => {
-                            const formattedDetails = formatRefundDetails(
-                              selectedRefund.gatewayResponse,
-                              selectedRefund.refundStatus,
-                              selectedRefund.refundMethod,
-                              selectedRefund.refundPercentage,
-                              selectedRefund.daysUntilEvent ?? 0
-                            );
-                            
-                            if (!formattedDetails) return null;
-                            
-                            const colorMap: Record<string, string> = {
-                              API: "purple",
-                              MANUAL: "blue",
-                              PENDING: "yellow",
-                              FAILED: "red",
-                              BASIC: "gray"
-                            };
-                            
-                            const color = colorMap[formattedDetails.type] || "gray";
-                            const DetailIcon = formattedDetails.icon || DocumentTextIcon;
-                            
-                            return (
-                              <div className={`bg-${color}-50 dark:bg-${color}-900/20 rounded-lg p-3 border border-${color}-200 dark:border-${color}-800`}>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <DetailIcon className={`h-5 w-5 text-${color}-600`} />
-                                  <p className={`font-medium text-${color}-700 dark:text-${color}-400`}>
-                                    {formattedDetails.title}
-                                  </p>
-                                </div>
-                                <div className="space-y-1 text-sm">
-                                  {formattedDetails.details.map((detail, idx) => (
-                                    <p key={idx}>
-                                      <span className="text-gray-500">{detail.label}:</span>{" "}
-                                      <span className="text-gray-700 dark:text-gray-300">{detail.value}</span>
-                                    </p>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()
-                        )}
-
-                        <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
-                          <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Request Date</p>
-                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                            {formatDateTime(selectedRefund.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Refund Reason */}
-                    {selectedRefund.refundReason && (
-                      <div className="mt-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Refund Reason</p>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                          {selectedRefund.refundReason}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Modal Footer */}
-                  <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 flex justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setModalOpen(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      Close
-                    </button>
-                    <Link
-                      href={`/my-bookings?tab=past`}
-                      className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
-                    >
-                      View Related Booking
-                    </Link>
-                  </div>
+                  <button
+                    onClick={() => setModalOpen(false)}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <XCircleIcon className="h-5 w-5 text-gray-500" />
+                  </button>
                 </div>
-              </motion.div>
-            </div>
+
+                {/* Status Banner */}
+                {(() => {
+                  const Status = getStatusConfig(selectedRefund.refundStatus);
+                  const StatusIcon = Status.icon;
+                  return (
+                    <div className={`flex items-center gap-3 p-4 rounded-xl ${Status.bg} border ${Status.border} mb-5`}>
+                      <StatusIcon className={`h-5 w-5 ${Status.text}`} />
+                      <div>
+                        <p className={`font-medium ${Status.text}`}>Refund {Status.label}</p>
+                        {selectedRefund.processedAt && (
+                          <p className="text-xs text-gray-500">
+                            Processed on {formatDateTime(selectedRefund.processedAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Details Grid */}
+                <div className="space-y-0 divide-y divide-gray-100 dark:divide-gray-700">
+                  <div className="flex justify-between py-3">
+                    <span className="text-sm text-gray-500">Event</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white text-right max-w-[60%]">
+                      {selectedRefund.eventTitle}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-3">
+                    <span className="text-sm text-gray-500">Vendor</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white text-right max-w-[60%]">
+                      {selectedRefund.vendorName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-3">
+                    <span className="text-sm text-gray-500">Package</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white text-right max-w-[60%]">
+                      {selectedRefund.packageName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-3">
+                    <span className="text-sm text-gray-500">Event Date</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {formatDate(selectedRefund.eventDate)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-3">
+                    <span className="text-sm text-gray-500">Amount Refunded</span>
+                    <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                      NPR {selectedRefund.refundAmount.toLocaleString()}
+                    </span>
+                  </div>
+                  {selectedRefund.totalAmount && (
+                    <div className="flex justify-between py-3">
+                      <span className="text-sm text-gray-500">Original Amount</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-300">
+                        NPR {selectedRefund.totalAmount.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  {selectedRefund.refundPercentage !== null && (
+                    <div className="flex justify-between py-3">
+                      <span className="text-sm text-gray-500">Refund Percentage</span>
+                      <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400">
+                        {selectedRefund.refundPercentage}%
+                      </span>
+                    </div>
+                  )}
+
+                  {/* ✅ Gateway Method - Real data only */}
+                  {selectedRefund.refundMethod && (
+                    (() => {
+                      const Method = getMethodConfig(selectedRefund.refundMethod);
+                      return (
+                        <div className="flex justify-between py-3">
+                          <span className="text-sm text-gray-500">Refund Method</span>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${Method.bg} ${Method.text} border ${Method.border}`}>
+                            <Method.icon className="h-3.5 w-3.5" />
+                            {Method.label}
+                          </span>
+                        </div>
+                      );
+                    })()
+                  )}
+
+                  <div className="flex justify-between py-3">
+                    <span className="text-sm text-gray-500">Requested On</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
+                      {formatDateTime(selectedRefund.createdAt)}
+                    </span>
+                  </div>
+                  {selectedRefund.cancelledBy && (
+                    <div className="flex justify-between py-3">
+                      <span className="text-sm text-gray-500">Cancelled By</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {selectedRefund.cancelledBy === "VENDOR" ? "Vendor" : "You"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cancellation Reason */}
+                {selectedRefund.cancellationReason && (
+                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Cancellation Reason</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">
+                      {selectedRefund.cancellationReason}
+                    </p>
+                  </div>
+                )}
+
+                {/* Footer Actions */}
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => setModalOpen(false)}
+                    className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
+                  >
+                    Close
+                  </button>
+                  <Link
+                    href={`/my-bookings?tab=past`}
+                    className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors text-sm font-medium text-center"
+                  >
+                    View Booking
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

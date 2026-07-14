@@ -1,39 +1,32 @@
-import { NextResponse } from "next/server";
+// app/api/organizer/events/[id]/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// ============================================
-// GET: Fetch event details
-// ============================================
-
+// GET - Fetch single event for organizer
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const session = await getServerSession(authOptions);
-
-    if (!session || !session.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "ORGANIZER" && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const { id } = await params;
 
-    // Fetch event with ticket tiers and bookings
-    const event = await prisma.ticketedEvent.findFirst({
-      where: {
-        id,
-        organizerId: session.user.id,
-      },
+    const event = await prisma.ticketedEvent.findUnique({
+      where: { id },
       include: {
         ticketTiers: true,
-        bookings: {
-          include: {
-            tier: true,
+        organizer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
         },
       },
@@ -43,211 +36,331 @@ export async function GET(
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    // ============================================
-    // ✅ FIX: Calculate from actual bookings (like Events List)
-    // ============================================
+    if (event.organizerId !== session.user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    let totalTicketsSold = 0;
-    let totalRevenue = 0;
+    // ✅ Calculate all stats
+    const totalTickets = event.ticketTiers.reduce((sum, tier) => sum + tier.quantity, 0);
+    const totalSold = event.ticketTiers.reduce((sum, tier) => sum + tier.soldCount, 0);
+    const percentSold = totalTickets > 0 ? Math.round((totalSold / totalTickets) * 100) : 0;
+    const totalRevenue = event.ticketTiers.reduce((sum, tier) => {
+      return sum + (tier.soldCount * Number(tier.price));
+    }, 0);
 
-    // Calculate from actual bookings
-    event.bookings.forEach((booking) => {
-      totalTicketsSold += booking.quantity;
-      totalRevenue += typeof booking.totalAmount === 'string' 
-        ? parseFloat(booking.totalAmount) 
-        : Number(booking.totalAmount);
-    });
-
-    // Also update the soldCount in tiers to match actual bookings
-    // Group bookings by tierId
-    const tierBookingCounts = new Map();
-    event.bookings.forEach((booking) => {
-      const tierId = booking.tierId;
-      tierBookingCounts.set(tierId, (tierBookingCounts.get(tierId) || 0) + booking.quantity);
-    });
-
-    // Update each tier's soldCount to match actual bookings
-    const updatedTiers = await Promise.all(
-      event.ticketTiers.map(async (tier) => {
-        const actualSold = tierBookingCounts.get(tier.id) || 0;
-        
-        // If the database has incorrect soldCount, update it
-        if (tier.soldCount !== actualSold) {
-          console.log(`📊 Fixing tier ${tier.name}: ${tier.soldCount} → ${actualSold}`);
-          await prisma.ticketTier.update({
-            where: { id: tier.id },
-            data: { soldCount: actualSold },
-          });
-        }
-        
-        return {
-          id: tier.id,
-          name: tier.name,
-          price: typeof tier.price === 'string' ? parseFloat(tier.price) : Number(tier.price),
-          quantity: tier.quantity,
-          soldCount: actualSold,
-        };
-      })
-    );
-
-    // Format response (matching Events List format)
-    const formattedEvent = {
+    return NextResponse.json({
       id: event.id,
       title: event.title,
       description: event.description,
       imageUrl: event.imageUrl,
+      galleryImages: event.galleryImages || [],
       eventDate: event.eventDate,
       eventTime: event.eventTime,
       location: event.location,
       capacity: event.capacity,
-      totalTicketsSold: totalTicketsSold,
-      totalRevenue: totalRevenue,
+      organizer: event.organizer,
+      ticketTiers: event.ticketTiers.map(tier => ({
+        id: tier.id,
+        name: tier.name,
+        price: Number(tier.price),
+        quantity: tier.quantity,
+        soldCount: tier.soldCount,
+      })),
+      // ✅ All stats for frontend
+      totalTickets,
+      totalSold,
+      percentSold,
+      totalRevenue,
+      totalTicketsSold: totalSold,
       isActive: event.isActive ?? true,
       isCompleted: event.isCompleted ?? false,
       completedAt: event.completedAt,
-      createdAt: event.createdAt,
-      updatedAt: event.updatedAt,
-      ticketTiers: updatedTiers,
-    };
-
-    console.log(`📊 Event ${event.title}: Total tickets sold = ${totalTicketsSold}`);
-
-    return NextResponse.json(formattedEvent);
+    });
   } catch (error) {
     console.error("Error fetching event:", error);
-    return NextResponse.json({ error: "Failed to fetch event" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch event" },
+      { status: 500 }
+    );
   }
 }
 
-// ============================================
-// PUT: Update event
-// ============================================
-
+// PUT - Update event
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const session = await getServerSession(authOptions);
-
-    if (!session || !session.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "ORGANIZER") {
+    const { id } = await params;
+    const body = await request.json();
+
+    const {
+      title,
+      description,
+      eventDate,
+      eventTime,
+      location,
+      capacity,
+      ticketTiers,
+      imageUrl,
+      galleryImages,
+    } = body;
+
+    // Validate required fields
+    if (!title || !eventDate || !eventTime || !location) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    // Check if event exists and user is the organizer
+    const existingEvent = await prisma.ticketedEvent.findUnique({
+      where: { id },
+      include: { ticketTiers: true },
+    });
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    if (existingEvent.organizerId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { title, description, eventDate, eventTime, location, capacity, ticketTiers, imageUrl } = body;
-
-    if (!title || !eventDate || !eventTime || !location) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    // Validate capacity
+    const numericCapacity = parseInt(capacity, 10);
+    if (isNaN(numericCapacity) || numericCapacity < 1) {
+      return NextResponse.json(
+        { error: "Please enter a valid capacity (minimum 1)" },
+        { status: 400 }
+      );
     }
 
-    // Update event
-    const updatedEvent = await prisma.ticketedEvent.update({
-      where: { id },
-      data: {
-        title,
-        description: description || "",
-        eventDate: new Date(eventDate),
-        eventTime,
-        location,
-        capacity: capacity || 0,
-        imageUrl: imageUrl || null,
-      },
-    });
+    // Validate ticket tiers
+    if (!ticketTiers || ticketTiers.length === 0) {
+      return NextResponse.json(
+        { error: "At least one ticket tier is required" },
+        { status: 400 }
+      );
+    }
 
-    // Get existing tiers to preserve sold counts
-    const existingTiers = await prisma.ticketTier.findMany({
-      where: { eventId: id },
-    });
-
-    // Update or create tiers
+    // Validate each tier
     for (const tier of ticketTiers) {
-      const existingTier = existingTiers.find(t => t.name === tier.name);
-      
-      if (existingTier) {
-        // Update existing tier - PRESERVE soldCount
-        await prisma.ticketTier.update({
-          where: { id: existingTier.id },
-          data: {
-            name: tier.name,
-            price: tier.price,
-            quantity: tier.quantity,
-            soldCount: existingTier.soldCount,
-          },
-        });
-      } else {
-        // Create new tier with soldCount = 0
-        await prisma.ticketTier.create({
-          data: {
-            eventId: id,
-            name: tier.name,
-            price: tier.price,
-            quantity: tier.quantity,
-            soldCount: 0,
-          },
-        });
+      if (!tier.name || tier.name.trim() === "") {
+        return NextResponse.json(
+          { error: "All ticket tiers must have a name" },
+          { status: 400 }
+        );
+      }
+      if (tier.price <= 0) {
+        return NextResponse.json(
+          { error: `Ticket tier "${tier.name}" must have a price greater than 0` },
+          { status: 400 }
+        );
+      }
+      if (tier.quantity <= 0) {
+        return NextResponse.json(
+          { error: `Ticket tier "${tier.name}" must have a quantity greater than 0` },
+          { status: 400 }
+        );
       }
     }
 
-    // Delete tiers that were removed (only if no tickets sold)
-    const newTierNames = new Set(ticketTiers.map((t: { name: string }) => t.name));
-    const tiersToDelete = existingTiers.filter((t: { name: string }) => !newTierNames.has(t.name));
-    
-    for (const tier of tiersToDelete) {
-      if (tier.soldCount === 0) {
-        await prisma.ticketTier.delete({ where: { id: tier.id } });
-      }
-      // If tickets were sold, keep the tier
+    // Validate total tickets don't exceed capacity
+    const totalTickets = ticketTiers.reduce((sum: number, tier: any) => sum + tier.quantity, 0);
+    if (totalTickets > numericCapacity) {
+      return NextResponse.json(
+        { error: `Total tickets (${totalTickets}) exceed event capacity (${numericCapacity})` },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ 
-      message: "Event updated successfully", 
-      eventId: updatedEvent.id 
+    // Check if any tier quantities were reduced below sold count
+    const existingTiersMap = new Map(
+      existingEvent.ticketTiers.map(t => [t.id, t])
+    );
+
+    for (const tier of ticketTiers) {
+      if (tier.id) {
+        const existingTier = existingTiersMap.get(tier.id);
+        if (existingTier && tier.quantity < existingTier.soldCount) {
+          return NextResponse.json(
+            { 
+              error: `Cannot reduce "${tier.name}" quantity below ${existingTier.soldCount} sold tickets.`,
+              tierName: tier.name,
+              soldCount: existingTier.soldCount,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Update the event with transaction
+    const updatedEvent = await prisma.$transaction(async (prisma) => {
+      // Update the event
+      const event = await prisma.ticketedEvent.update({
+        where: { id },
+        data: {
+          title,
+          description,
+          eventDate: new Date(`${eventDate}T${eventTime}`),
+          eventTime,
+          location,
+          capacity: numericCapacity,
+          imageUrl: imageUrl || null,
+          galleryImages: galleryImages || [],
+          updatedAt: new Date(),
+        },
+      });
+
+      // Handle ticket tiers
+      const existingTierIds = existingEvent.ticketTiers.map(t => t.id);
+      const updatedTierIds = ticketTiers
+        .filter((t: any) => t.id)
+        .map((t: any) => t.id);
+
+      // Delete tiers that were removed (only if no sold tickets)
+      const tiersToDelete = existingTierIds.filter(
+        (id) => !updatedTierIds.includes(id)
+      );
+
+      for (const tierId of tiersToDelete) {
+        const tier = existingEvent.ticketTiers.find(t => t.id === tierId);
+        if (tier && tier.soldCount === 0) {
+          await prisma.ticketTier.delete({
+            where: { id: tierId },
+          });
+        }
+      }
+
+      // Update or create tiers
+      for (const tier of ticketTiers) {
+        if (tier.id && existingTierIds.includes(tier.id)) {
+          // Update existing tier
+          await prisma.ticketTier.update({
+            where: { id: tier.id },
+            data: {
+              name: tier.name,
+              price: tier.price,
+              quantity: tier.quantity,
+            },
+          });
+        } else {
+          // Create new tier
+          await prisma.ticketTier.create({
+            data: {
+              eventId: event.id,
+              name: tier.name,
+              price: tier.price,
+              quantity: tier.quantity,
+              soldCount: 0,
+            },
+          });
+        }
+      }
+
+      // Return updated event with ticket tiers
+      return await prisma.ticketedEvent.findUnique({
+        where: { id },
+        include: {
+          ticketTiers: true,
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Event updated successfully",
+      event: {
+        id: updatedEvent?.id,
+        title: updatedEvent?.title,
+        description: updatedEvent?.description,
+        imageUrl: updatedEvent?.imageUrl,
+        galleryImages: updatedEvent?.galleryImages,
+        eventDate: updatedEvent?.eventDate,
+        eventTime: updatedEvent?.eventTime,
+        location: updatedEvent?.location,
+        capacity: updatedEvent?.capacity,
+        ticketTiers: updatedEvent?.ticketTiers,
+      },
     });
   } catch (error) {
     console.error("Error updating event:", error);
-    return NextResponse.json({ error: "Failed to update event" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update event" },
+      { status: 500 }
+    );
   }
 }
 
-// ============================================
-// DELETE: Delete event
-// ============================================
-
+// DELETE - Delete event
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
     const session = await getServerSession(authOptions);
-
-    if (!session || !session.user) {
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "ORGANIZER") {
+    const { id } = await params;
+
+    // Check if event exists and user is the organizer
+    const existingEvent = await prisma.ticketedEvent.findUnique({
+      where: { id },
+      include: {
+        ticketTiers: true,
+        bookings: true,
+      },
+    });
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    if (existingEvent.organizerId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Delete all ticket tiers first
-    await prisma.ticketTier.deleteMany({
-      where: { eventId: id },
-    });
+    // Check if there are any bookings
+    if (existingEvent.bookings && existingEvent.bookings.length > 0) {
+      return NextResponse.json(
+        { 
+          error: "Cannot delete event with existing bookings. Please cancel all bookings first." 
+        },
+        { status: 400 }
+      );
+    }
 
-    // Delete the event
+    // Delete the event (cascade will delete ticket tiers)
     await prisma.ticketedEvent.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      message: "Event deleted successfully",
+    });
   } catch (error) {
     console.error("Error deleting event:", error);
-    return NextResponse.json({ error: "Failed to delete event" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete event" },
+      { status: 500 }
+    );
   }
 }

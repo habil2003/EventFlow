@@ -122,21 +122,38 @@ export default function HomePage() {
     }
   }, [session, router]);
 
+  // ✅ FIXED: Fetch data with proper array extraction
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Helper to safely extract array from response
+        const extractEvents = (data: any): Event[] => {
+          if (Array.isArray(data)) return data;
+          if (data?.events && Array.isArray(data.events)) return data.events;
+          return [];
+        };
+
+        const extractVendors = (data: any): Vendor[] => {
+          if (Array.isArray(data)) return data;
+          if (data?.vendors && Array.isArray(data.vendors)) return data.vendors;
+          return [];
+        };
+
+        // Fetch events
         const eventsRes = await fetch("/api/events?limit=4");
         if (eventsRes.ok) {
           const eventsData = await eventsRes.json();
-          setFeaturedEvents(eventsData.slice(0, 4));
+          setFeaturedEvents(extractEvents(eventsData).slice(0, 4));
         }
 
+        // Fetch vendors
         const vendorsRes = await fetch("/api/vendors?limit=4");
         if (vendorsRes.ok) {
           const vendorsData = await vendorsRes.json();
-          setFeaturedVendors(vendorsData.slice(0, 4));
+          setFeaturedVendors(extractVendors(vendorsData).slice(0, 4));
         }
 
+        // Fetch stats
         const statsRes = await fetch("/api/public/stats");
         if (statsRes.ok) {
           const statsData = await statsRes.json();
@@ -235,62 +252,6 @@ export default function HomePage() {
           </motion.div>
         ))}
       </div>
-
-      {/* Navigation Bar
-      <motion.nav
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700 shadow-sm"
-      >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center space-x-3 group">
-              <motion.div
-                whileHover={{ rotate: 360, scale: 1.1 }}
-                transition={{ duration: 0.5 }}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 shadow-lg"
-              >
-                <span className="text-lg font-bold text-white">EF</span>
-              </motion.div>
-              <motion.span
-                whileHover={{ scale: 1.05 }}
-                className="text-xl font-bold bg-gradient-to-r from-indigo-700 to-purple-700 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent"
-              >
-                EventFlow
-              </motion.span>
-            </Link>
-
-            <div className="flex items-center gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05, rotate: 180 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ duration: 0.3 }}
-                onClick={toggleTheme}
-                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
-              >
-                {theme === "light" ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5" />}
-              </motion.button>
-
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                animate={{
-                  boxShadow: ["0px 0px 0px rgba(99,102,241,0)", "0px 0px 20px rgba(99,102,241,0.3)", "0px 0px 0px rgba(99,102,241,0)"]
-                }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <Link
-                  href="/login"
-                  className="rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-md"
-                >
-                  Sign In
-                </Link>
-              </motion.div>
-            </div>
-          </div>
-        </div>
-      </motion.nav> */}
 
       {/* Main Content - Marketing Only */}
       <main>

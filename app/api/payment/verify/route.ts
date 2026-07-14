@@ -76,11 +76,38 @@ export async function GET(request: NextRequest) {
 
     console.log('📍 [payment-verify] Original return URL:', originalReturnUrl);
 
+    // ✅ FIX: Build proper redirect URLs using existing pages
+    let successRedirectUrl = `${appUrl}/payment/success`;
+    let failedRedirectUrl = `${appUrl}/payment/failed`;
+
+    // Extract bookingId from returnUrlParam if present
+    if (returnUrlParam) {
+      try {
+        const url = new URL(returnUrlParam, appUrl);
+        const bookingId = url.searchParams.get('bookingId');
+        if (bookingId) {
+          successRedirectUrl = `${appUrl}/payment/success?bookingId=${bookingId}`;
+          failedRedirectUrl = `${appUrl}/payment/failed?bookingId=${bookingId}`;
+        }
+      } catch (e) {
+        console.warn('⚠️ [payment-verify] Could not parse returnUrl:', returnUrlParam);
+      }
+    }
+
+    // Also check if the originalReturnUrl has bookingId
+    if (originalReturnUrl && originalReturnUrl.includes('bookingId=')) {
+      const bookingIdMatch = originalReturnUrl.match(/bookingId=([^&?]+)/);
+      if (bookingIdMatch && bookingIdMatch[1]) {
+        successRedirectUrl = `${appUrl}/payment/success?bookingId=${bookingIdMatch[1]}`;
+        failedRedirectUrl = `${appUrl}/payment/failed?bookingId=${bookingIdMatch[1]}`;
+      }
+    }
+
     // ✅ Check if already processed
     if (transaction.status === 'SUCCESS') {
       console.log('✅ [payment-verify] Transaction already processed:', transactionId);
       return NextResponse.redirect(
-        `${originalReturnUrl}?payment=already_processed`
+        `${successRedirectUrl}&payment=already_processed`
       );
     }
 
@@ -178,10 +205,10 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // ✅ Redirect to the original return URL with success
-      console.log('🔗 [payment-verify] Redirecting to:', `${originalReturnUrl}?payment=success`);
+      // ✅ Redirect to success page
+      console.log('🔗 [payment-verify] Redirecting to:', successRedirectUrl);
       return NextResponse.redirect(
-        `${originalReturnUrl}?payment=success`
+        successRedirectUrl
       );
     } else {
       console.log('❌ [payment-verify] Payment failed for transaction:', transactionId);
@@ -201,9 +228,10 @@ export async function GET(request: NextRequest) {
         console.log(`🗑️ [payment-verify] Deleted ${deleted.count} pending tickets`);
       }
 
-      // ✅ Redirect to the original return URL with error
+      // ✅ Redirect to failed page
+      console.log('🔗 [payment-verify] Redirecting to failed:', failedRedirectUrl);
       return NextResponse.redirect(
-        `${originalReturnUrl}?payment=failed`
+        failedRedirectUrl
       );
     }
   } catch (error) {

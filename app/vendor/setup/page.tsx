@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import ImageUpload from "@/components/ImageUpload";
-import { 
+import {
   PlusIcon,
   TrashIcon,
   MoonIcon,
@@ -33,24 +33,24 @@ export default function VendorSetupPage() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-  
+
   // Package fields
   const [packageName, setPackageName] = useState("");
   const [packagePrice, setPackagePrice] = useState("");
   const [packageDescription, setPackageDescription] = useState("");
   const [packageImageUrl, setPackageImageUrl] = useState<string | null>(null);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  
+
   // NEW: Pricing Type
   const [pricingType, setPricingType] = useState<"fixed" | "per_person">("fixed");
-  
+
   // NEW: Guest Limits
   const [minGuests, setMinGuests] = useState<string>("");
   const [maxGuests, setMaxGuests] = useState<string>("");
-  
+
   // NEW: Service Details (JSON object)
   const [serviceDetails, setServiceDetails] = useState<any>({});
-  
+
   // Add-ons
   const [addOns, setAddOns] = useState<AddOn[]>([
     { id: crypto.randomUUID(), name: "", extraPrice: 0, isOptional: true, pricingType: "fixed" }
@@ -98,7 +98,7 @@ export default function VendorSetupPage() {
   };
 
   const updateAddOn = (id: string, field: keyof AddOn, value: string | number | boolean) => {
-    setAddOns(addOns.map(addon => 
+    setAddOns(addOns.map(addon =>
       addon.id === id ? { ...addon, [field]: value } : addon
     ));
   };
@@ -111,16 +111,29 @@ export default function VendorSetupPage() {
     setAddOns(addOns.filter(addon => addon.id !== id));
   };
 
-  const handleImageUpload = (url: string) => {
-    setPackageImageUrl(url);
+  const handleImageUpload = (result: string | string[]) => {
+    if (Array.isArray(result)) {
+      // If multiple images, take the first one
+      if (result.length > 0) {
+        setPackageImageUrl(result[0]);
+      }
+    } else {
+      setPackageImageUrl(result);
+    }
   };
 
   const handleRemoveImage = () => {
     setPackageImageUrl(null);
   };
 
-  const handleGalleryUpload = (url: string) => {
-    setGalleryImages([...galleryImages, url]);
+  const handleGalleryUpload = (result: string | string[]) => {
+    if (Array.isArray(result)) {
+      // Multiple images uploaded at once - add all to gallery
+      setGalleryImages(prev => [...prev, ...result]);
+    } else {
+      // Single image uploaded
+      setGalleryImages(prev => [...prev, result]);
+    }
   };
 
   const removeGalleryImage = (index: number) => {
@@ -181,7 +194,7 @@ export default function VendorSetupPage() {
         setMaxGuests("");
         setServiceDetails({});
         setAddOns([{ id: crypto.randomUUID(), name: "", extraPrice: 0, isOptional: true, pricingType: "fixed" }]);
-        
+
         setTimeout(() => {
           router.push("/vendor/packages");
         }, 2000);
@@ -213,10 +226,10 @@ export default function VendorSetupPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-      
+
       {/* Main Content */}
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-        
+
         <Link
           href="/vendor/packages"
           className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mb-6"
@@ -227,9 +240,8 @@ export default function VendorSetupPage() {
 
         {/* Message Alert */}
         {message && (
-          <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 rounded-xl p-4 shadow-lg min-w-[300px] text-center ${
-            message.type === "success" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"
-          }`}>
+          <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 rounded-xl p-4 shadow-lg min-w-[300px] text-center ${message.type === "success" ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"
+            }`}>
             <div className="flex items-center justify-center gap-3">
               {message.type === "success" ? (
                 <CheckCircleIcon className="h-5 w-5 text-green-600" />
@@ -248,7 +260,7 @@ export default function VendorSetupPage() {
             <h1 className="text-xl font-bold text-white">Create New Package</h1>
             <p className="text-white/80 text-sm mt-1">Add a new service package for customers</p>
           </div>
-          
+
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Featured Image Upload */}
             <div className="space-y-4">
@@ -266,14 +278,14 @@ export default function VendorSetupPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Gallery Images</h2>
               </div>
-              
+
               {/* Existing Gallery Images */}
               {galleryImages.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                   {galleryImages.map((url, index) => (
                     <div key={index} className="relative group">
-                      <img 
-                        src={url} 
+                      <img
+                        src={url}
                         alt={`Gallery ${index + 1}`}
                         className="w-full h-32 object-cover rounded-lg"
                       />
@@ -288,7 +300,7 @@ export default function VendorSetupPage() {
                   ))}
                 </div>
               )}
-              
+
               <ImageUpload
                 onUploadComplete={handleGalleryUpload}
                 label="Add to gallery (max 4MB)"
@@ -299,7 +311,7 @@ export default function VendorSetupPage() {
             {/* Basic Information */}
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Package Details</h2>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Package Name *
@@ -320,11 +332,10 @@ export default function VendorSetupPage() {
                   Pricing Type *
                 </label>
                 <div className="grid grid-cols-2 gap-4">
-                  <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    pricingType === "fixed" 
-                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20" 
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${pricingType === "fixed"
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20"
                       : "border-gray-200 dark:border-gray-700"
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       value="fixed"
@@ -337,12 +348,11 @@ export default function VendorSetupPage() {
                       <div className="text-xs text-gray-500">Same price regardless of guest count</div>
                     </div>
                   </label>
-                  
-                  <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    pricingType === "per_person" 
-                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20" 
+
+                  <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${pricingType === "per_person"
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20"
                       : "border-gray-200 dark:border-gray-700"
-                  }`}>
+                    }`}>
                     <input
                       type="radio"
                       value="per_person"

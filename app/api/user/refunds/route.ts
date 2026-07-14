@@ -17,11 +17,80 @@ function calculateDaysUntilEvent(eventDate: Date, cancellationDate: Date): numbe
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
-// Helper: Get refund percentage based on days until event (customer policy)
+// Helper: Get refund percentage based on days until event
 function getRefundPercentageFromPolicy(daysUntilEvent: number): number {
   if (daysUntilEvent >= 7) return 100;
   if (daysUntilEvent >= 3) return 50;
   return 0;
+}
+
+// Helper: Calculate refund percentage from data
+function calculateRefundPercentage(
+  refund: any,
+  gatewayResponse: any,
+  refundAmount: number,
+  totalAmount: number | null,
+  daysUntilEvent: number | null,
+  cancelledBy: string | null
+): number | null {
+  let percentage: number | null = null;
+
+  // 1. Try to get from gatewayResponse
+  if (gatewayResponse?.refundPercentage !== undefined && gatewayResponse?.refundPercentage !== null) {
+    percentage = gatewayResponse.refundPercentage;
+  }
+
+  // 2. Try to get from refund object directly
+  if (percentage === null && (refund as any).refundPercentage !== undefined && (refund as any).refundPercentage !== null) {
+    percentage = (refund as any).refundPercentage;
+  }
+
+  // 3. Calculate from amounts
+  if (percentage === null && refundAmount && totalAmount && totalAmount > 0) {
+    percentage = calculateRefundPercentageFromAmount(refundAmount, totalAmount);
+  }
+
+  // 4. For vendor declines, it's always 100% of deposit
+  if (percentage === null && cancelledBy === 'VENDOR') {
+    percentage = 100;
+  }
+
+  // 5. Calculate from days until event using policy
+  if (percentage === null && daysUntilEvent !== null) {
+    percentage = getRefundPercentageFromPolicy(daysUntilEvent);
+  }
+
+  return percentage;
+}
+
+// ✅ Extract refund method - NO FALLBACKS
+function extractRefundMethod(gatewayResponse: any): string | null {
+  if (!gatewayResponse) return null;
+
+  // Check all possible fields where method could be stored
+  if (gatewayResponse.method) {
+    const method = gatewayResponse.method.toUpperCase();
+    if (method === 'KHALTI_API' || method === 'MANUAL') {
+      return method;
+    }
+  }
+
+  if (gatewayResponse.transferMethod) {
+    const method = gatewayResponse.transferMethod.toUpperCase();
+    if (['BANK_TRANSFER', 'KHALTI_MANUAL', 'CASH', 'CHEQUE'].includes(method)) {
+      return method;
+    }
+  }
+
+  if (gatewayResponse.type) {
+    const method = gatewayResponse.type.toUpperCase();
+    if (['KHALTI_API', 'BANK_TRANSFER', 'KHALTI_MANUAL', 'CASH', 'CHEQUE', 'MANUAL'].includes(method)) {
+      return method;
+    }
+  }
+
+  // ✅ Return null if no method found - NO FALLBACK
+  return null;
 }
 
 export async function GET() {
@@ -42,9 +111,31 @@ export async function GET() {
       include: {
         vendorBooking: {
           include: {
-            vendor: true,
-            servicePackage: true,
-            userSocialEvent: true,
+            vendor: {
+              select: {
+                businessName: true,
+                serviceType: true,
+              },
+            },
+            servicePackage: {
+              select: {
+                name: true,
+                price: true,
+              },
+            },
+            userSocialEvent: {
+              select: {
+                title: true,
+                eventDate: true,
+                guestCount: true,
+              },
+            },
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         paymentTransaction: true,
@@ -64,9 +155,31 @@ export async function GET() {
       include: {
         ticketBooking: {
           include: {
-            event: true,
-            tier: true,
-            user: true,
+            event: {
+              select: {
+                title: true,
+                eventDate: true,
+                location: true,
+                organizer: {
+                  select: {
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+            tier: {
+              select: {
+                name: true,
+                price: true,
+              },
+            },
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         paymentTransaction: true,
@@ -76,71 +189,9 @@ export async function GET() {
       },
     });
 
-    // Helper to extract refund details
-    const extractRefundDetails = (gatewayResponse: any, refund: any) => {
-      let refundMethod = null;
-      let refundReference = null;
-      let refundProcessedBy = null;
-      let refundProcessedAt = null;
-      let refundPercentage = null;
-      let refundKhaltiFee = null;
-      let refundPlatformKeeps = null;
-      let daysUntilEvent = null;
-
-      if (gatewayResponse) {
-        if (gatewayResponse.method === 'KHALTI_API') {
-          refundMethod = 'KHALTI_API';
-          refundReference = refund.gatewayRefundId;
-          refundProcessedBy = gatewayResponse.processedBy || 'System';
-          refundProcessedAt = gatewayResponse.processedAt || refund.processedAt;
-          refundPercentage = gatewayResponse.refundPercentage;
-          refundKhaltiFee = gatewayResponse.khaltiFee;
-          refundPlatformKeeps = gatewayResponse.platformKeeps;
-          daysUntilEvent = gatewayResponse.daysUntilEvent;
-        }
-        else if (gatewayResponse.method === 'MANUAL' && gatewayResponse.transferMethod) {
-          refundMethod = gatewayResponse.transferMethod;
-          refundReference = gatewayResponse.transactionReference;
-          refundProcessedBy = gatewayResponse.processedBy || 'Admin';
-          refundProcessedAt = gatewayResponse.processedAt || refund.processedAt;
-          refundPercentage = gatewayResponse.refundPercentage;
-          refundKhaltiFee = gatewayResponse.khaltiFee;
-          refundPlatformKeeps = gatewayResponse.platformKeeps;
-          daysUntilEvent = gatewayResponse.daysUntilEvent;
-        }
-        else if (gatewayResponse.refundResult?.method === 'KHALTI_API') {
-          refundMethod = 'KHALTI_API';
-          refundReference = refund.gatewayRefundId;
-          refundProcessedBy = 'System (Vendor Decline)';
-          refundProcessedAt = refund.processedAt;
-          refundPercentage = gatewayResponse.refundResult?.refundPercentage;
-          refundKhaltiFee = gatewayResponse.refundResult?.khaltiFee;
-        }
-        else if (gatewayResponse.transferMethod) {
-          refundMethod = gatewayResponse.transferMethod;
-          refundReference = gatewayResponse.transactionReference;
-          refundProcessedBy = gatewayResponse.processedBy || 'Admin';
-          refundProcessedAt = gatewayResponse.processedAt || refund.processedAt;
-          refundPercentage = gatewayResponse.refundPercentage;
-        }
-      }
-
-      return {
-        refundMethod,
-        refundReference,
-        refundProcessedBy,
-        refundProcessedAt,
-        refundPercentage,
-        refundKhaltiFee,
-        refundPlatformKeeps,
-        daysUntilEvent,
-      };
-    };
-
-    // Format vendor refunds
+    // Format vendor refunds - NO FALLBACKS
     const formattedVendorRefunds = vendorRefunds.map((refund) => {
       const gatewayResponse = refund.gatewayResponse as any;
-      const refundDetails = extractRefundDetails(gatewayResponse, refund);
       
       const refundAmount = Number(refund.refundAmount);
       const totalAmount = refund.vendorBooking?.depositAmount 
@@ -149,10 +200,8 @@ export async function GET() {
           ? Number(refund.vendorBooking.totalAmount)
           : null;
 
-      // Calculate days until event
-      let daysUntilEvent = refundDetails.daysUntilEvent;
-      if (!daysUntilEvent && refund.vendorBooking?.userSocialEvent?.eventDate) {
-        // ✅ FIX: cancelledAt doesn't exist
+      let daysUntilEvent = null;
+      if (refund.vendorBooking?.userSocialEvent?.eventDate) {
         const cancellationDate = refund.createdAt || new Date();
         daysUntilEvent = calculateDaysUntilEvent(
           refund.vendorBooking.userSocialEvent.eventDate,
@@ -160,63 +209,57 @@ export async function GET() {
         );
       }
 
-      // Calculate refund percentage (with fallbacks)
-      let refundPercentage = refundDetails.refundPercentage;
-      
-      // Fallback 1: Calculate from amounts
-      if (refundPercentage === null && refundAmount && totalAmount && totalAmount > 0) {
-        refundPercentage = calculateRefundPercentageFromAmount(refundAmount, totalAmount);
-      }
-      
-      // Fallback 2: For vendor declines, it's always 100% of deposit
-      if (refundPercentage === null && refund.vendorBooking?.cancelledBy === 'VENDOR') {
-        refundPercentage = 100;
-      }
-      
-      // Fallback 3: Calculate from days until event using policy
-      if (refundPercentage === null && daysUntilEvent !== null) {
-        refundPercentage = getRefundPercentageFromPolicy(daysUntilEvent);
-      }
+      const refundPercentage = calculateRefundPercentage(
+        refund,
+        gatewayResponse,
+        refundAmount,
+        totalAmount,
+        daysUntilEvent,
+        refund.vendorBooking?.cancelledBy || null
+      );
+
+      // ✅ Extract refund method - NO FALLBACK
+      const refundMethod = extractRefundMethod(gatewayResponse);
 
       return {
         id: refund.id,
         bookingId: refund.vendorBookingId,
-        type: "VENDOR",
+        type: "VENDOR" as const,
         vendorName: refund.vendorBooking?.vendor?.businessName || "Unknown Vendor",
         eventTitle: refund.vendorBooking?.userSocialEvent?.title || "Unknown Event",
         eventDate: refund.vendorBooking?.userSocialEvent?.eventDate,
         packageName: refund.vendorBooking?.servicePackage?.name || "Unknown Package",
         totalAmount: totalAmount,
         refundAmount: refundAmount,
-        refundStatus: refund.refundStatus,
-        refundMethod: refundDetails.refundMethod,
-        refundReference: refundDetails.refundReference,
-        refundProcessedBy: refundDetails.refundProcessedBy,
-        refundProcessedAt: refundDetails.refundProcessedAt,
         refundPercentage: refundPercentage,
-        refundKhaltiFee: refundDetails.refundKhaltiFee,
-        refundPlatformKeeps: refundDetails.refundPlatformKeeps,
+        refundStatus: refund.refundStatus,
+        refundMethod: refundMethod, // ✅ Real data, null if not found
+        refundReference: refund.gatewayRefundId || null,
+        refundProcessedBy: gatewayResponse?.processedBy || null,
+        refundProcessedAt: gatewayResponse?.processedAt || refund.processedAt || null,
+        refundKhaltiFee: gatewayResponse?.khaltiFee || null,
+        refundPlatformKeeps: gatewayResponse?.platformKeeps || null,
         refundReason: refund.refundReason,
-        cancelledBy: refund.vendorBooking?.cancelledBy,
-        cancellationReason: refund.vendorBooking?.cancellationReason,
+        cancelledBy: refund.vendorBooking?.cancelledBy || null,
+        cancellationReason: refund.vendorBooking?.cancellationReason || refund.refundReason || null,
         daysUntilEvent: daysUntilEvent,
         createdAt: refund.createdAt,
         processedAt: refund.processedAt,
+        gatewayResponse: gatewayResponse,
       };
     });
 
-    // Format ticket refunds (similar logic)
+    // Format ticket refunds - NO FALLBACKS
     const formattedTicketRefunds = ticketRefunds.map((refund) => {
       const gatewayResponse = refund.gatewayResponse as any;
-      const refundDetails = extractRefundDetails(gatewayResponse, refund);
       
       const refundAmount = Number(refund.refundAmount);
       const totalAmount = refund.ticketBooking?.totalAmount 
         ? Number(refund.ticketBooking.totalAmount)
         : null;
 
-      let daysUntilEvent = refundDetails.daysUntilEvent;
-      if (!daysUntilEvent && refund.ticketBooking?.event?.eventDate) {
+      let daysUntilEvent = null;
+      if (refund.ticketBooking?.event?.eventDate) {
         const cancellationDate = refund.createdAt || new Date();
         daysUntilEvent = calculateDaysUntilEvent(
           refund.ticketBooking.event.eventDate,
@@ -224,39 +267,45 @@ export async function GET() {
         );
       }
 
-      let refundPercentage = refundDetails.refundPercentage;
-      if (refundPercentage === null && refundAmount && totalAmount && totalAmount > 0) {
-        refundPercentage = calculateRefundPercentageFromAmount(refundAmount, totalAmount);
-      }
-      if (refundPercentage === null && daysUntilEvent !== null) {
-        refundPercentage = getRefundPercentageFromPolicy(daysUntilEvent);
-      }
+      const refundPercentage = calculateRefundPercentage(
+        refund,
+        gatewayResponse,
+        refundAmount,
+        totalAmount,
+        daysUntilEvent,
+        'CUSTOMER'
+      );
+
+      // ✅ Extract refund method - NO FALLBACK
+      const refundMethod = extractRefundMethod(gatewayResponse);
+
+      const organizerName = refund.ticketBooking?.event?.organizer?.name || 'Event Organizer';
 
       return {
         id: refund.id,
         bookingId: refund.ticketBookingId,
-        type: "TICKET",
-        // ✅ FIX: organizer doesn't exist, use organizerId
-        vendorName: refund.ticketBooking?.event?.organizerId || "Event Organizer",
+        type: "TICKET" as const,
+        vendorName: organizerName,
         eventTitle: refund.ticketBooking?.event?.title || "Unknown Event",
         eventDate: refund.ticketBooking?.event?.eventDate,
         packageName: refund.ticketBooking?.tier?.name || "Ticket",
         totalAmount: totalAmount,
         refundAmount: refundAmount,
-        refundStatus: refund.refundStatus,
-        refundMethod: refundDetails.refundMethod,
-        refundReference: refundDetails.refundReference,
-        refundProcessedBy: refundDetails.refundProcessedBy,
-        refundProcessedAt: refundDetails.refundProcessedAt,
         refundPercentage: refundPercentage,
-        refundKhaltiFee: refundDetails.refundKhaltiFee,
-        refundPlatformKeeps: refundDetails.refundPlatformKeeps,
+        refundStatus: refund.refundStatus,
+        refundMethod: refundMethod, // ✅ Real data, null if not found
+        refundReference: refund.gatewayRefundId || null,
+        refundProcessedBy: gatewayResponse?.processedBy || null,
+        refundProcessedAt: gatewayResponse?.processedAt || refund.processedAt || null,
+        refundKhaltiFee: gatewayResponse?.khaltiFee || null,
+        refundPlatformKeeps: gatewayResponse?.platformKeeps || null,
         refundReason: refund.refundReason,
         cancelledBy: "CUSTOMER",
-        cancellationReason: refund.refundReason,
+        cancellationReason: refund.refundReason || null,
         daysUntilEvent: daysUntilEvent,
         createdAt: refund.createdAt,
         processedAt: refund.processedAt,
+        gatewayResponse: gatewayResponse,
       };
     });
 

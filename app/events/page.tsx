@@ -30,10 +30,19 @@ interface Event {
   title: string;
   description: string;
   imageUrl: string | null;
+  galleryImages?: string[];
   eventDate: string;
   eventTime: string;
   location: string;
+  organizer?: {
+    id: string;
+    name: string;
+    email: string;
+  };
   ticketTiers: TicketTier[];
+  totalSold?: number;
+  totalTickets?: number;
+  percentSold?: number;
 }
 
 export default function EventsPage() {
@@ -67,14 +76,24 @@ export default function EventsPage() {
     }
   }, [status, router]);
 
+  // ✅ FIXED: Handle both array and object response formats
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         const response = await fetch("/api/events");
         const data = await response.json();
-        setEvents(data);
+        
+        // Handle both formats: array or { events: [...] }
+        if (Array.isArray(data)) {
+          setEvents(data);
+        } else if (data.events && Array.isArray(data.events)) {
+          setEvents(data.events);
+        } else {
+          setEvents([]);
+        }
       } catch (error) {
         console.error("Error fetching events:", error);
+        setEvents([]);
       } finally {
         setLoading(false);
       }
