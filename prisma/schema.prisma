@@ -90,6 +90,7 @@ model User {
   ticketBookings   TicketBooking[]
   vendorBookings   VendorBooking[]
   processedPayouts Payout[] @relation("AdminPayouts")
+  ticketReservations TicketReservation[]
 }
 
 // ==========================================
@@ -130,6 +131,7 @@ model TicketedEvent {
   organizer   User            @relation("OrganizerToEvents", fields: [organizerId], references: [id], onDelete: Cascade)
   ticketTiers TicketTier[]
   bookings    TicketBooking[]
+  reservations TicketReservation[]
 }
 
 model TicketTier {
@@ -144,6 +146,7 @@ model TicketTier {
 
   event          TicketedEvent   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   ticketBookings TicketBooking[]
+  reservations TicketReservation[]
 }
 
 model TicketBooking {
@@ -175,6 +178,28 @@ model TicketBooking {
   tier                TicketTier           @relation(fields: [tierId], references: [id], onDelete: Cascade)
   paymentTransactions PaymentTransaction[]
   refunds             Refund[]
+}
+
+model TicketReservation {
+  id        String   @id @default(cuid())
+  eventId   String
+  tierId    String
+  userId    String
+  quantity  Int
+  expiresAt DateTime
+  status    String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED, EXPIRED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event TicketedEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  tier  TicketTier    @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([tierId])
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([status])
 }
 
 // ==========================================
@@ -389,13 +414,13 @@ model Refund {
 
 model Payout {
   id              String   @id @default(cuid())
-  bookingId       String?   // Optional - for vendor bookings
-  ticketBookingId String?   // Optional - for ticket sales
+  bookingId       String?  
+  ticketBookingId String?  
   vendorId        String
   amount          Decimal  @db.Decimal(10, 2)
   platformCommission Decimal @db.Decimal(10, 2) @default(0)
   vendorPayout    Decimal  @db.Decimal(10, 2) @default(0)
-  type            String   // "DEPOSIT", "REMAINING", "TICKET_SALES"
+  type            String   // "DEPOSIT", "REMAINING", "TICKET_SALES", "TICKET_SALES_BULK"
   status          String   @default("PENDING")
   adminId         String?
   transactionId   String?  @unique
@@ -404,6 +429,11 @@ model Payout {
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  // ✅ Self-relation for bulk payouts - FIXED
+  bulkPayoutId    String?   
+  parentPayout    Payout?   @relation("PayoutBulkRelation", fields: [bulkPayoutId], references: [id], onDelete: SetNull)
+  childPayouts    Payout[]  @relation("PayoutBulkRelation")
 
   // Relations
   vendorBooking VendorBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
@@ -415,6 +445,7 @@ model Payout {
   @@index([ticketBookingId])
   @@index([vendorId])
   @@index([status])
+  @@index([bulkPayoutId])
 }
 
 model VendorUnavailableDate {

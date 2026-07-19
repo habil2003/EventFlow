@@ -13,7 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ✅ FIX: Get vendor bookings - EXCLUDE those with active refunds
+    // Get vendor bookings
     const vendorBookings = await prisma.vendorBooking.findMany({
       where: {
         bookingStatus: { notIn: ['DECLINED'] },
@@ -21,17 +21,12 @@ export async function GET() {
         paymentStatus: {
           in: ['HELD_IN_ESCROW', 'PROCESSING_PAYOUT']
         },
-        // ✅ Exclude bookings that have any refund (processed, pending, or failed)
         NOT: {
-          OR: [
-            {
-              refunds: {
-                some: {
-                  refundStatus: { in: ['PROCESSED', 'PENDING_ADMIN', 'PENDING'] }
-                }
-              }
+          refunds: {
+            some: {
+              refundStatus: { in: ['PROCESSED', 'PENDING_ADMIN', 'PENDING'] }
             }
-          ]
+          }
         }
       },
       include: {
@@ -40,21 +35,26 @@ export async function GET() {
         userSocialEvent: true,
         servicePackage: true,
         payouts: true,
-        refunds: true, // Include refunds to check status
+        refunds: true,
       },
       orderBy: {
         depositPaidAt: 'desc',
       },
     });
 
-    // Get ticket bookings with money held in escrow - EXCLUDE those with refunds
+    // ✅ FIX: Get ticket bookings - include PROCESSING_PAYOUT even if escrowReleased is true
     const ticketBookings = await prisma.ticketBooking.findMany({
       where: {
         paymentStatus: {
           in: ['HELD_IN_ESCROW', 'PROCESSING_PAYOUT']
         },
-        escrowReleased: false,
-        // ✅ Exclude bookings that have any refund
+        OR: [
+          { escrowReleased: false },
+          { 
+            escrowReleased: true,
+            paymentStatus: 'PROCESSING_PAYOUT'
+          }
+        ],
         NOT: {
           refunds: {
             some: {
@@ -79,78 +79,50 @@ export async function GET() {
         tier: true,
         paymentTransactions: true,
         refunds: true,
+        payouts: true,
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    // Format vendor bookings with complete status tracking
+    // Format vendor bookings
     const formattedVendorBookings = vendorBookings.map((booking) => {
       const totalAmount = Number(booking.totalAmount);
       const depositAmount = booking.depositAmount ? Number(booking.depositAmount) : totalAmount * 0.2;
       const remainingAmount = booking.remainingAmount ? Number(booking.remainingAmount) : totalAmount - depositAmount;
       
-      // Track what has been released by admin (COMPLETED payouts)
       const hasDepositPayout = booking.payouts.some(p => p.type === 'DEPOSIT' && p.status === 'COMPLETED');
       const hasRemainingPayout = booking.payouts.some(p => p.type === 'REMAINING' && p.status === 'COMPLETED');
       
-      // Track pending payouts (waiting for manual verification)
       const pendingPayouts = booking.payouts.filter(p => p.status === 'PENDING');
       const hasPendingPayout = pendingPayouts.length > 0;
       
-      // Track what customer has paid
       const customerPaidDeposit = !!booking.depositPaidAt;
       const customerPaidFull = booking.vendorPaymentStatus === 'FULLY_PAID' || !!booking.remainingPaidAt;
       
-      // Track vendor acceptance status
       const vendorAccepted = booking.bookingStatus === 'ACCEPTED';
       const vendorPending = booking.bookingStatus === 'PENDING';
       const vendorDeclined = booking.bookingStatus === 'DECLINED';
       
-      // ✅ Check if booking has an active refund
       const hasActiveRefund = booking.refunds.some(
         r => ['PROCESSED', 'PENDING_ADMIN', 'PENDING'].includes(r.refundStatus)
       );
       
-      // Determine what buttons to show based on vendor acceptance
       let availableActions = [];
       
       if (booking.paymentStatus === 'HELD_IN_ESCROW' && !hasActiveRefund) {
-        // DEPOSIT RELEASE CONDITIONS:
-        // 1. Customer paid deposit
-        // 2. Deposit NOT already released
-        // 3. Remaining NOT already released
-        // 4. Vendor MUST have accepted the booking
         if (customerPaidDeposit && !hasDepositPayout && !hasRemainingPayout && vendorAccepted) {
           availableActions.push('RELEASE_DEPOSIT');
         }
-        
-        // REMAINING RELEASE CONDITIONS:
-        // 1. Customer paid FULL amount
-        // 2. Remaining NOT already released
         if (customerPaidFull && !hasRemainingPayout) {
           availableActions.push('RELEASE_REMAINING');
         }
       }
       
-      // Get vendor acceptance display text
-      let vendorStatusDisplay = '';
-      let vendorStatusColor = '';
-      if (vendorAccepted) {
-        vendorStatusDisplay = 'Vendor Accepted';
-        vendorStatusColor = 'text-green-600 dark:text-green-400';
-      } else if (vendorPending) {
-        vendorStatusDisplay = 'Waiting for Vendor Approval';
-        vendorStatusColor = 'text-yellow-600 dark:text-yellow-400';
-      } else if (vendorDeclined) {
-        vendorStatusDisplay = 'Vendor Declined';
-        vendorStatusColor = 'text-red-600 dark:text-red-400';
-      }
-      
       return {
         id: booking.id,
-        type: 'VENDOR',
+        type: 'VENDOR' as const,
         eventTitle: booking.userSocialEvent.title,
         eventDate: booking.userSocialEvent.eventDate,
         vendorName: booking.vendor.businessName,
@@ -179,35 +151,46 @@ export async function GET() {
         vendorPaymentStatus: booking.vendorPaymentStatus,
         amountReleasedAt: booking.amountReleasedAt,
         availableActions: availableActions,
-        location: (booking.userSocialEvent as any).location || 'N/A',
+        location: 'N/A',
         depositReleasedAt: booking.payouts.find(p => p.type === 'DEPOSIT')?.processedAt || null,
         vendorAccepted: vendorAccepted,
         vendorPending: vendorPending,
         vendorDeclined: vendorDeclined,
-        vendorStatusDisplay: vendorStatusDisplay,
-        vendorStatusColor: vendorStatusColor,
         depositReleaseDisabledReason: !vendorAccepted && customerPaidDeposit && !hasDepositPayout && !hasActiveRefund
           ? 'Waiting for vendor to accept booking'
           : hasActiveRefund
           ? 'Refund in progress - Cannot release funds'
           : null,
+        canBulkRelease: (availableActions.includes('RELEASE_DEPOSIT') || availableActions.includes('RELEASE_REMAINING')),
+        bulkReleaseType: availableActions.includes('RELEASE_DEPOSIT') ? 'deposit' : 
+                         availableActions.includes('RELEASE_REMAINING') ? 'remaining' : null,
       };
     });
 
-    // Format ticket bookings
+    // Format ticket bookings with enhanced grouping data
     const formattedTicketBookings = ticketBookings.map((booking) => {
       const totalAmount = Number(booking.totalAmount);
-      const platformCommission = totalAmount * 0.1;
+      const commissionRate = 0.1;
+      const platformCommission = totalAmount * commissionRate;
       const organizerPayout = totalAmount - platformCommission;
       
       const hasActiveRefund = booking.refunds.some(
         r => ['PROCESSED', 'PENDING_ADMIN', 'PENDING'].includes(r.refundStatus)
       );
 
+      const pendingPayouts = booking.payouts.filter(p => p.status === 'PENDING');
+      const hasPendingPayout = pendingPayouts.length > 0;
+
+      const isCompleted = booking.event.isCompleted || false;
+      const canRelease = booking.event.isCompleted === true && 
+                        booking.paymentStatus === 'HELD_IN_ESCROW' && 
+                        !hasActiveRefund;
+
       return {
         id: booking.id,
-        type: 'TICKET',
+        type: 'TICKET' as const,
         eventTitle: booking.event.title,
+        eventId: booking.event.id,
         eventDate: booking.event.eventDate,
         eventLocation: booking.event.location,
         organizerName: booking.event.organizer?.name || 'Organizer',
@@ -223,27 +206,90 @@ export async function GET() {
         paymentStatus: booking.paymentStatus,
         escrowReleased: booking.escrowReleased,
         hasActiveRefund: hasActiveRefund,
+        hasPendingPayout: hasPendingPayout,
+        pendingPayouts: pendingPayouts.map(p => ({
+          id: p.id,
+          amount: p.amount,
+          type: p.type,
+          vendorPayout: p.vendorPayout,
+        })),
         createdAt: booking.createdAt,
         paymentTransactionId: booking.paymentTransactions[0]?.id,
-        isCompleted: booking.event.isCompleted || false,
-        canRelease: booking.event.isCompleted === true && 
-                    booking.paymentStatus === 'HELD_IN_ESCROW' && 
-                    !hasActiveRefund,
-        availableActions: booking.paymentStatus === 'HELD_IN_ESCROW' && 
-                         booking.event.isCompleted === true && 
-                         !hasActiveRefund 
-                         ? ['RELEASE_TICKET'] 
-                         : [],
+        isCompleted: isCompleted,
+        canRelease: canRelease,
+        availableActions: canRelease ? ['RELEASE_TICKET'] : [],
+        canBulkRelease: canRelease,
+        bulkReleaseType: canRelease ? 'ticket' : null,
       };
     });
 
-    // Combine both types
-    const allEscrowItems = [...formattedVendorBookings, ...formattedTicketBookings];
+    // Get event groups for ticket bookings with more details
+    const ticketBookingsByEvent = formattedTicketBookings.reduce((groups, booking) => {
+      const key = booking.eventId || booking.eventTitle;
+      if (!groups[key]) {
+        groups[key] = {
+          eventId: booking.eventId,
+          eventTitle: booking.eventTitle,
+          eventDate: booking.eventDate,
+          eventLocation: booking.eventLocation,
+          organizerName: booking.organizerName,
+          organizerId: booking.organizerId,
+          bookings: [],
+          totalAmount: 0,
+          totalCommission: 0,
+          organizerPayout: 0,
+          count: 0,
+          bookingIds: [],
+          canBulkReleaseAll: true,
+        };
+      }
+      groups[key].bookings.push(booking);
+      groups[key].totalAmount += booking.totalAmount || 0;
+      groups[key].totalCommission += booking.platformCommission || 0;
+      groups[key].organizerPayout += booking.organizerPayout || 0;
+      groups[key].count += 1;
+      groups[key].bookingIds.push(booking.id);
+      
+      // Check if any booking can't be released (for bulk release availability)
+      if (!booking.canRelease && booking.paymentStatus !== 'PROCESSING_PAYOUT') {
+        groups[key].canBulkReleaseAll = false;
+      }
+      
+      return groups;
+    }, {} as Record<string, any>);
+
+    const eventGroups = Object.values(ticketBookingsByEvent);
+
+    // Calculate summary statistics
+    const totalEscrowAmount = [...formattedVendorBookings, ...formattedTicketBookings].reduce((sum, b) => {
+      if (b.type === 'VENDOR') {
+        if (b.hasDepositPayout && !b.hasRemainingPayout) {
+          return sum + (b.remainingAmount || 0);
+        }
+        return sum + (b.depositAmount || 0);
+      }
+      return sum + b.totalAmount;
+    }, 0);
+
+    const releaseableVendors = formattedVendorBookings.filter(b => b.availableActions.length > 0);
+    const releaseableTickets = formattedTicketBookings.filter(b => b.canRelease);
+    const processingPayouts = [...formattedVendorBookings, ...formattedTicketBookings].filter(
+      b => b.paymentStatus === 'PROCESSING_PAYOUT'
+    );
 
     return NextResponse.json({ 
-      bookings: allEscrowItems,
+      bookings: [...formattedVendorBookings, ...formattedTicketBookings],
       vendorCount: formattedVendorBookings.length,
       ticketCount: formattedTicketBookings.length,
+      eventGroups: eventGroups,
+      summary: {
+        totalEscrowAmount: totalEscrowAmount,
+        releaseableVendors: releaseableVendors.length,
+        releaseableTickets: releaseableTickets.length,
+        processingPayouts: processingPayouts.length,
+        totalItems: formattedVendorBookings.length + formattedTicketBookings.length,
+      },
+      bulkReleaseAvailable: eventGroups.some((group: any) => group.canBulkReleaseAll && group.count > 1),
     });
   } catch (error) {
     console.error('Error fetching escrow data:', error);

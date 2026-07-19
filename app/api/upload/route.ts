@@ -1,8 +1,11 @@
 // app/api/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { utapi } from 'uploadthing/server';
+import { UTApi } from 'uploadthing/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+
+// ✅ Create UTApi instance
+const utapi = new UTApi();
 
 export async function POST(request: NextRequest) {
   try {

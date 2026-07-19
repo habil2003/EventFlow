@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { sendEmail } from '@/lib/email';
+
+// Helper function to get platform commission rate
+async function getPlatformCommissionRate(): Promise<number> {
+  // You can make this configurable via env or database
+  return Number(process.env.PLATFORM_COMMISSION || '0.1');
+}
 
 export async function POST(request: Request) {
   try {
@@ -15,7 +22,9 @@ export async function POST(request: Request) {
 
     console.log('Release funds request:', { bookingId, amount, type });
 
-    // First, check if it's a ticket booking
+    // ==========================================
+    // FIRST: Check if it's a ticket booking
+    // ==========================================
     const ticketBooking = await prisma.ticketBooking.findUnique({
       where: { id: bookingId },
       include: { 
@@ -27,32 +36,62 @@ export async function POST(request: Request) {
         user: true,
         tier: true,
         paymentTransactions: true,
+        refunds: true,
+        payouts: true,
       },
     });
 
-    // If it's a ticket booking, handle ticket release
+    // ==========================================
+    // HANDLE TICKET BOOKING RELEASE
+    // ==========================================
     if (ticketBooking) {
       console.log('Processing ticket booking release:', ticketBooking.id);
 
-      // Check if already released
+      // ✅ Check if already released
       if (ticketBooking.escrowReleased) {
         return NextResponse.json({ 
           error: 'Funds already released for this ticket booking' 
         }, { status: 400 });
       }
 
-      // Check if event is completed before releasing funds
+      // ✅ Check if event is completed before releasing funds
       if (!ticketBooking.event.isCompleted) {
         return NextResponse.json({ 
           error: 'Cannot release funds: Event has not been marked as completed by the organizer.' 
         }, { status: 400 });
       }
 
+      // ✅ Check for active refunds
+      const activeRefund = ticketBooking.refunds.find(r => 
+        ['PENDING', 'PENDING_ADMIN', 'PROCESSING'].includes(r.refundStatus)
+      );
+
+      if (activeRefund) {
+        return NextResponse.json({ 
+          error: 'Cannot release funds: An active refund is in progress for this ticket booking.',
+          refundId: activeRefund.id,
+          refundStatus: activeRefund.refundStatus
+        }, { status: 400 });
+      }
+
+      // ✅ Check for existing pending payout (prevent duplicates)
+      const existingPendingPayout = ticketBooking.payouts.find(p => 
+        p.type === 'TICKET_SALES' && p.status === 'PENDING'
+      );
+
+      if (existingPendingPayout) {
+        return NextResponse.json({ 
+          error: 'A payout is already pending for this ticket booking. Please verify or cancel the existing payout first.',
+          existingPayoutId: existingPendingPayout.id
+        }, { status: 400 });
+      }
+
+      const commissionRate = await getPlatformCommissionRate();
       const totalAmount = Number(ticketBooking.totalAmount);
-      const platformCommission = totalAmount * 0.1;
+      const platformCommission = totalAmount * commissionRate;
       const organizerPayout = totalAmount - platformCommission;
 
-      // Update ticket booking to PROCESSING_PAYOUT (not COMPLETED yet)
+      // Update ticket booking to PROCESSING_PAYOUT
       const updatedTicketBooking = await prisma.ticketBooking.update({
         where: { id: ticketBooking.id },
         data: {
@@ -67,7 +106,6 @@ export async function POST(request: Request) {
         where: { userId: ticketBooking.event.organizerId },
       });
 
-      // If no vendor profile exists, create a temporary one for payout tracking
       if (!organizerVendorProfile) {
         const organizerUser = await prisma.user.findUnique({
           where: { id: ticketBooking.event.organizerId },
@@ -85,7 +123,7 @@ export async function POST(request: Request) {
         console.log('Created vendor profile for organizer:', organizerVendorProfile.id);
       }
 
-      // Create payout record as PENDING (not COMPLETED)
+      // Create payout record as PENDING
       const payout = await prisma.payout.create({
         data: {
           ticketBookingId: ticketBooking.id,
@@ -104,6 +142,50 @@ export async function POST(request: Request) {
 
       console.log('Ticket payout created (PENDING):', payout);
 
+      // ✅ Send email notification to organizer
+      try {
+        const organizer = await prisma.user.findUnique({
+          where: { id: ticketBooking.event.organizerId },
+        });
+
+        if (organizer?.email) {
+          await sendEmail({
+            to: organizer.email,
+            subject: '💰 Ticket Payout Initiated - EventFlow',
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <title>Payout Initiated</title>
+              </head>
+              <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                  <h1 style="color: white; margin: 0;">💰 Payout Initiated</h1>
+                </div>
+                <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                  <p>Dear ${organizer.name || 'Organizer'},</p>
+                  <p>A payout for your event <strong>${ticketBooking.event.title}</strong> has been initiated.</p>
+                  <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 5px 0;"><strong>Total Ticket Sales:</strong> NPR ${totalAmount.toLocaleString()}</p>
+                    <p style="margin: 5px 0;"><strong>Platform Commission (${Math.round(commissionRate * 100)}%):</strong> NPR ${platformCommission.toLocaleString()}</p>
+                    <p style="margin: 5px 0; font-size: 18px; color: #16a34a;"><strong>Your Payout:</strong> NPR ${organizerPayout.toLocaleString()}</p>
+                  </div>
+                  <p style="color: #6b7280; font-size: 14px;">The payout will be processed within 1-3 business days.</p>
+                  <hr style="margin: 30px 0 20px; border-color: #e5e7eb;">
+                  <p style="color: #6b7280; font-size: 12px; text-align: center;">EventFlow Support Team</p>
+                </div>
+              </body>
+              </html>
+            `,
+          });
+          console.log(`✅ Ticket payout email sent to: ${organizer.email}`);
+        }
+      } catch (emailError) {
+        console.error('Failed to send ticket payout email:', emailError);
+        // Don't fail the request if email fails
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Ticket funds release initiated. Please manually transfer to organizer and verify.',
@@ -114,12 +196,20 @@ export async function POST(request: Request) {
       });
     }
 
-    // If not a ticket booking, check for vendor booking
+    // ==========================================
+    // IF NOT TICKET, CHECK VENDOR BOOKING
+    // ==========================================
     const vendorBooking = await prisma.vendorBooking.findUnique({
       where: { id: bookingId },
       include: { 
-        vendor: true,
+        vendor: {
+          include: {
+            user: true,
+          },
+        },
+        user: true,
         payouts: true,
+        refunds: true,
       },
     });
 
@@ -127,14 +217,49 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    // ✅ FIX 1: Handle DECLINED status properly
-    if (vendorBooking.bookingStatus === ('DECLINED' as any)) {
+    // ✅ Check for DECLINED status (using type assertion for enum)
+    if (vendorBooking.bookingStatus === 'DECLINED' as any) {
       return NextResponse.json({ 
         error: 'Cannot release funds for declined booking. This booking has been refunded.' 
       }, { status: 400 });
     }
 
-    // Get existing payouts to check what's already released
+    // ✅ Check for active refunds
+    const activeRefund = vendorBooking.refunds.find(r => 
+      ['PENDING', 'PENDING_ADMIN', 'PROCESSING'].includes(r.refundStatus)
+    );
+
+    if (activeRefund) {
+      return NextResponse.json({ 
+        error: 'Cannot release funds: An active refund is in progress for this booking.',
+        refundId: activeRefund.id,
+        refundStatus: activeRefund.refundStatus
+      }, { status: 400 });
+    }
+
+    // ✅ Check for existing pending payouts (prevent duplicates)
+    const existingPendingDeposit = vendorBooking.payouts.find(p => 
+      p.type === 'DEPOSIT' && p.status === 'PENDING'
+    );
+    const existingPendingRemaining = vendorBooking.payouts.find(p => 
+      p.type === 'REMAINING' && p.status === 'PENDING'
+    );
+
+    if (type === 'deposit' && existingPendingDeposit) {
+      return NextResponse.json({ 
+        error: 'A deposit payout is already pending for this booking. Please verify or cancel the existing payout first.',
+        existingPayoutId: existingPendingDeposit.id
+      }, { status: 400 });
+    }
+
+    if (type === 'remaining' && existingPendingRemaining) {
+      return NextResponse.json({ 
+        error: 'A remaining payout is already pending for this booking. Please verify or cancel the existing payout first.',
+        existingPayoutId: existingPendingRemaining.id
+      }, { status: 400 });
+    }
+
+    // Get existing completed payouts
     const existingDepositPayout = vendorBooking.payouts.find(p => p.type === 'DEPOSIT' && p.status === 'COMPLETED');
     const existingRemainingPayout = vendorBooking.payouts.find(p => p.type === 'REMAINING' && p.status === 'COMPLETED');
     
@@ -149,8 +274,9 @@ export async function POST(request: Request) {
     }
 
     // Calculate amounts
+    const commissionRate = await getPlatformCommissionRate();
     const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    const platformCommission = numericAmount * 0.1;
+    const platformCommission = numericAmount * commissionRate;
     const vendorPayoutAmount = numericAmount - platformCommission;
 
     console.log('Vendor commission calculation:', { numericAmount, platformCommission, vendorPayoutAmount });
@@ -183,7 +309,7 @@ export async function POST(request: Request) {
           case 'PENDING':
             statusMessage = 'Vendor has not responded to the booking request yet.';
             break;
-          case ('DECLINED' as any):
+          case 'DECLINED' as any:
             statusMessage = 'Vendor has declined this booking. Please process refund instead.';
             break;
           case 'COMPLETED':
@@ -219,7 +345,7 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
       
-      // ✅ FIX 2: Convert Decimal to number for comparison
+      // Check 2: Verify remaining amount exists
       if (!vendorBooking.remainingAmount || Number(vendorBooking.remainingAmount) <= 0) {
         return NextResponse.json({ 
           error: 'No remaining amount to release.' 
@@ -259,6 +385,49 @@ export async function POST(request: Request) {
     });
 
     console.log('Vendor payout created (PENDING):', payout);
+
+    // ✅ Send email notification to vendor
+    try {
+      const vendor = vendorBooking.vendor;
+      if (vendor?.user?.email) {
+        const amountType = type === 'deposit' ? 'Deposit Payment' : 'Remaining Payment';
+        await sendEmail({
+          to: vendor.user.email,
+          subject: `💰 ${amountType} Initiated - EventFlow`,
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <title>Payout Initiated</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                <h1 style="color: white; margin: 0;">💰 ${amountType} Initiated</h1>
+              </div>
+              <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p>Dear ${vendor.businessName || 'Vendor'},</p>
+                <p>A payout has been initiated for your booking.</p>
+                <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                  <p style="margin: 5px 0;"><strong>Payment Type:</strong> ${amountType}</p>
+                  <p style="margin: 5px 0;"><strong>Total Amount:</strong> NPR ${numericAmount.toLocaleString()}</p>
+                  <p style="margin: 5px 0;"><strong>Platform Commission (${Math.round(commissionRate * 100)}%):</strong> NPR ${platformCommission.toLocaleString()}</p>
+                  <p style="margin: 5px 0; font-size: 18px; color: #16a34a;"><strong>Your Payout:</strong> NPR ${vendorPayoutAmount.toLocaleString()}</p>
+                </div>
+                <p style="color: #6b7280; font-size: 14px;">The payout will be processed within 1-3 business days.</p>
+                <hr style="margin: 30px 0 20px; border-color: #e5e7eb;">
+                <p style="color: #6b7280; font-size: 12px; text-align: center;">EventFlow Support Team</p>
+              </div>
+            </body>
+            </html>
+          `,
+        });
+        console.log(`✅ Vendor payout email sent to: ${vendor.user.email}`);
+      }
+    } catch (emailError) {
+      console.error('Failed to send vendor payout email:', emailError);
+      // Don't fail the request if email fails
+    }
 
     return NextResponse.json({
       success: true,

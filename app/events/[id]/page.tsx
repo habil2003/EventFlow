@@ -75,7 +75,7 @@ function CountdownTimer({ targetDate, targetTime }: { targetDate: string | Date;
           // Check if the string already contains a time (ISO format)
           if (targetDate.includes('T')) {
             eventDateTime = new Date(targetDate);
-          } 
+          }
           // Check if it's just a date string
           else if (targetDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
             if (targetTime) {
@@ -86,7 +86,7 @@ function CountdownTimer({ targetDate, targetTime }: { targetDate: string | Date;
           else {
             eventDateTime = new Date(targetDate);
           }
-        } 
+        }
         // Handle Date objects
         else if (Object.prototype.toString.call(targetDate) === '[object Date]') {
           eventDateTime = new Date(targetDate as Date);
@@ -100,14 +100,14 @@ function CountdownTimer({ targetDate, targetTime }: { targetDate: string | Date;
               const year = parseInt(dateMatch[1]);
               const month = parseInt(dateMatch[2]) - 1;
               const day = parseInt(dateMatch[3]);
-              
+
               let hours = 0, minutes = 0;
               if (targetTime) {
                 const timeParts = targetTime.split(':');
                 hours = parseInt(timeParts[0]) || 0;
                 minutes = parseInt(timeParts[1]) || 0;
               }
-              
+
               eventDateTime = new Date(year, month, day, hours, minutes);
             }
           }
@@ -202,6 +202,8 @@ export default function EventDetailPage() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
   const [relatedEvents, setRelatedEvents] = useState<Event[]>([]);
+  const [reservationMessage, setReservationMessage] = useState<string>("");
+  const [reservationType, setReservationType] = useState<"success" | "warning" | "">("");
 
   // Get event ID from params
   useEffect(() => {
@@ -270,6 +272,7 @@ export default function EventDetailPage() {
   const backUrl = isOrganizer ? "/organizer/events" : "/events";
   const backLabel = isOrganizer ? "Back to My Events" : "Back to Events";
 
+  // Updated handlePurchase function
   const handlePurchase = async () => {
     if (!session) {
       router.push("/login");
@@ -282,6 +285,9 @@ export default function EventDetailPage() {
     }
 
     setPurchasing(true);
+    setReservationMessage("");
+    setReservationType("");
+
     try {
       const orderResponse = await fetch("/api/tickets/purchase", {
         method: "POST",
@@ -301,6 +307,10 @@ export default function EventDetailPage() {
         return;
       }
 
+      // ✅ Show reservation message
+      setReservationMessage(orderData.message || "Tickets reserved! Please complete payment.");
+      setReservationType("success");
+
       const paymentResponse = await fetch("/api/tickets/confirm-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -315,10 +325,14 @@ export default function EventDetailPage() {
       if (paymentResponse.ok && paymentData.payment_url) {
         window.location.href = paymentData.payment_url;
       } else {
+        setReservationMessage(paymentData.error || "Payment initiation failed");
+        setReservationType("warning");
         alert(paymentData.error || "Payment initiation failed");
       }
     } catch (error) {
       console.error("Error purchasing ticket:", error);
+      setReservationMessage("An error occurred. Please try again.");
+      setReservationType("warning");
       alert("An error occurred");
     } finally {
       setPurchasing(false);
@@ -328,7 +342,7 @@ export default function EventDetailPage() {
   const handleShare = async () => {
     const url = window.location.href;
     const title = event?.title || "Check out this event!";
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -483,11 +497,10 @@ export default function EventDetailPage() {
                           <button
                             key={index}
                             onClick={() => setCurrentImageIndex(index)}
-                            className={`w-2 h-2 rounded-full transition-all ${
-                              index === currentImageIndex
-                                ? "bg-white w-6"
-                                : "bg-white/50 hover:bg-white/80"
-                            }`}
+                            className={`w-2 h-2 rounded-full transition-all ${index === currentImageIndex
+                              ? "bg-white w-6"
+                              : "bg-white/50 hover:bg-white/80"
+                              }`}
                           />
                         ))}
                       </div>
@@ -589,11 +602,10 @@ export default function EventDetailPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
                     onClick={() => available > 0 && setSelectedTier(tier.id)}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                      isSelected
-                        ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 shadow-lg"
-                        : "border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600"
-                    } ${available === 0 ? "opacity-60 cursor-not-allowed" : ""}`}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${isSelected
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 shadow-lg"
+                      : "border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600"
+                      } ${available === 0 ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex-1">
@@ -632,6 +644,25 @@ export default function EventDetailPage() {
                   exit={{ opacity: 0, height: 0 }}
                   className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700"
                 >
+                  {/* ✅ Reservation Status Message */}
+                  {reservationMessage && (
+                    <div className={`mb-4 p-3 rounded-lg ${reservationType === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400' : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400'}`}>
+                      <div className="flex items-center gap-2">
+                        {reservationType === 'success' ? (
+                          <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <ClockIcon className="h-5 w-5 text-yellow-500" />
+                        )}
+                        <span>{reservationMessage}</span>
+                      </div>
+                      {reservationType === 'success' && (
+                        <p className="text-xs mt-1 text-green-600 dark:text-green-400">
+                          ⏳ You have 10 minutes to complete payment. Your tickets are reserved.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex flex-col sm:flex-row gap-4 items-end justify-between">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -667,7 +698,7 @@ export default function EventDetailPage() {
                     <button
                       onClick={handlePurchase}
                       disabled={purchasing}
-                      className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2 hover:scale-105 transform"
+                      className="px-8 py-3 bg-linear-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2 hover:scale-105 transform"
                     >
                       {purchasing ? (
                         <>
@@ -680,6 +711,7 @@ export default function EventDetailPage() {
                           Purchase Now
                         </>
                       )}
+
                     </button>
                   </div>
                 </motion.div>
@@ -756,11 +788,10 @@ export default function EventDetailPage() {
                   <button
                     key={index}
                     onClick={() => setCurrentImageIndex(index)}
-                    className={`w-2 h-2 rounded-full transition-all ${
-                      index === currentImageIndex
-                        ? "bg-white w-6"
-                        : "bg-white/50 hover:bg-white/80"
-                    }`}
+                    className={`w-2 h-2 rounded-full transition-all ${index === currentImageIndex
+                      ? "bg-white w-6"
+                      : "bg-white/50 hover:bg-white/80"
+                      }`}
                   />
                 ))}
               </div>

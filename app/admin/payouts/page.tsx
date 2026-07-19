@@ -410,6 +410,17 @@ export default function AdminPayoutsPage() {
                             View
                           </Link>
                         </td>
+
+                        <td className="px-6 py-4">
+                          {payout.isBulk && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                              📦 {payout.ticketCount} tickets
+                            </span>
+                          )}
+                          {!payout.isBulk && payout.type === 'TICKET_SALES' && (
+                            <span className="text-xs text-gray-400">Single ticket</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })
@@ -454,7 +465,7 @@ export default function AdminPayoutsPage() {
             <div>
               <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Payout Summary</p>
               <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-                This page shows all payouts processed through the system. 
+                This page shows all payouts processed through the system.
                 <strong> Completed</strong> payouts have been verified with proof documents.
                 <strong> Pending</strong> payouts are waiting for admin approval.
                 <strong> Processing</strong> payouts are being manually processed.

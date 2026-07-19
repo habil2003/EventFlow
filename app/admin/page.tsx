@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { 
+import {
   UsersIcon,
   BuildingOfficeIcon,
   BriefcaseIcon,
@@ -34,7 +34,7 @@ interface DashboardStats {
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  
+
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"users" | "vendors" | "organizers">("users");
@@ -43,7 +43,7 @@ export default function AdminDashboard() {
   const [organizers, setOrganizers] = useState<any[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-  
+
   // Commission state
   const [totalCommission, setTotalCommission] = useState(0);
   const [totalReleased, setTotalReleased] = useState(0);
@@ -148,12 +148,11 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        
+
         {/* Message Alert */}
         {message && (
-          <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 rounded-xl p-4 shadow-lg min-w-[300px] text-center ${
-            message.type === "success" ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800" : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800"
-          }`}>
+          <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 rounded-xl p-4 shadow-lg min-w-[300px] text-center ${message.type === "success" ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800" : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800"
+            }`}>
             <div className="flex items-center justify-center gap-3">
               {message.type === "success" ? (
                 <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -293,52 +292,91 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Quick Action Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Quick Action Cards - Enhanced with button-like styling */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Link href="/admin/approvals?tab=vendors" className="block">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-all group">
-              <div className="flex items-center justify-between">
+            <div className="group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-yellow-200 dark:border-yellow-800 hover:border-yellow-400 dark:hover:border-yellow-600 hover:shadow-lg transition-all duration-200 p-5 cursor-pointer overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-yellow-50 to-transparent dark:from-yellow-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+              <div className="relative flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Pending Approvals</p>
-                  <p className="text-2xl font-bold text-yellow-600">{pendingVendors.length + pendingOrganizers.length}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Approvals</p>
+                  <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-500">{pendingVendors.length + pendingOrganizers.length}</p>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <ClockIcon className="h-5 w-5 text-yellow-600" />
+                <div className="h-12 w-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center group-hover:scale-110 group-hover:bg-yellow-200 dark:group-hover:bg-yellow-800/50 transition-all duration-200">
+                  <ClockIcon className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mt-2">
-                {pendingVendors.length} vendors, {pendingOrganizers.length} organizers
-              </p>
+              <div className="relative mt-2 flex items-center justify-between">
+                <p className="text-xs text-gray-400">
+                  {pendingVendors.length} vendors, {pendingOrganizers.length} organizers
+                </p>
+                <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  Review →
+                </span>
+              </div>
             </div>
           </Link>
 
           <Link href="/admin/escrow" className="block">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-all group">
-              <div className="flex items-center justify-between">
+            <div className="group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-lg transition-all duration-200 p-5 cursor-pointer overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-indigo-50 to-transparent dark:from-indigo-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+              <div className="relative flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Escrow Management</p>
-                  <p className="text-2xl font-bold text-indigo-600">Release Funds</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Escrow Management</p>
+                  <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">Release Funds</p>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <ShieldCheckIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <div className="h-12 w-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center group-hover:scale-110 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-all duration-200">
+                  <ShieldCheckIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mt-2">Manage held funds & pay vendors</p>
+              <div className="relative mt-2 flex items-center justify-between">
+                <p className="text-xs text-gray-400">Manage held funds & pay vendors</p>
+                <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  Manage →
+                </span>
+              </div>
+            </div>
+          </Link>
+
+          <Link href="/admin/payouts" className="block">
+            <div className="group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-purple-200 dark:border-purple-800 hover:border-purple-400 dark:hover:border-purple-600 hover:shadow-lg transition-all duration-200 p-5 cursor-pointer overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-50 to-transparent dark:from-purple-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Payout History</p>
+                  <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">{payoutsCount}</p>
+                </div>
+                <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center group-hover:scale-110 group-hover:bg-purple-200 dark:group-hover:bg-purple-800/50 transition-all duration-200">
+                  <DocumentTextIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+              <div className="relative mt-2 flex items-center justify-between">
+                <p className="text-xs text-gray-400">View all completed payouts</p>
+                <span className="text-xs font-medium text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  View All →
+                </span>
+              </div>
             </div>
           </Link>
 
           <Link href="/admin/refunds" className="block">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-all group">
-              <div className="flex items-center justify-between">
+            <div className="group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-red-200 dark:border-red-800 hover:border-red-400 dark:hover:border-red-600 hover:shadow-lg transition-all duration-200 p-5 cursor-pointer overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-red-50 to-transparent dark:from-red-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+              <div className="relative flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Refund Management</p>
-                  <p className="text-2xl font-bold text-red-600">Process Refunds</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Refund Management</p>
+                  <p className="text-3xl font-bold text-red-600 dark:text-red-400">Process</p>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <CurrencyRupeeIcon className="h-5 w-5 text-red-600 dark:text-red-400" />
+                <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center group-hover:scale-110 group-hover:bg-red-200 dark:group-hover:bg-red-800/50 transition-all duration-200">
+                  <CurrencyRupeeIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mt-2">Handle customer refunds</p>
+              <div className="relative mt-2 flex items-center justify-between">
+                <p className="text-xs text-gray-400">Handle customer refunds</p>
+                <span className="text-xs font-medium text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  Process →
+                </span>
+              </div>
             </div>
           </Link>
         </div>
@@ -348,22 +386,20 @@ export default function AdminDashboard() {
           <nav className="flex gap-6">
             <button
               onClick={() => setActiveTab("users")}
-              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
-                activeTab === "users"
+              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === "users"
                   ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
+                }`}
             >
               <UsersIcon className="h-4 w-4" />
               All Users ({users.length})
             </button>
             <button
               onClick={() => setActiveTab("vendors")}
-              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
-                activeTab === "vendors"
+              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === "vendors"
                   ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
+                }`}
             >
               <BuildingOfficeIcon className="h-4 w-4" />
               Vendors ({vendors.length})
@@ -375,11 +411,10 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={() => setActiveTab("organizers")}
-              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
-                activeTab === "organizers"
+              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === "organizers"
                   ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-              }`}
+                }`}
             >
               <BriefcaseIcon className="h-4 w-4" />
               Organizers ({organizers.length})
@@ -413,27 +448,25 @@ export default function AdminDashboard() {
                       <td className="px-6 py-3 text-sm text-gray-900 dark:text-white">{user.name}</td>
                       <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{user.email}</td>
                       <td className="px-6 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          user.role === "ADMIN" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
-                          user.role === "ORGANIZER" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                          user.role === "VENDOR" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                          "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${user.role === "ADMIN" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" :
+                            user.role === "ORGANIZER" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                              user.role === "VENDOR" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                                "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                          }`}>
                           {user.role}
                         </span>
-                       </td>
+                      </td>
                       <td className="px-6 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          user.status === "APPROVED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                          user.status === "BLOCKED" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${user.status === "APPROVED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                            user.status === "BLOCKED" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                              "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                          }`}>
                           {user.status}
                         </span>
-                       </td>
+                      </td>
                       <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">
                         {new Date(user.createdAt).toLocaleDateString()}
-                       </td>
+                      </td>
                       <td className="px-6 py-3">
                         <div className="flex gap-2">
                           {user.status === "APPROVED" ? (
@@ -462,8 +495,8 @@ export default function AdminDashboard() {
                             </button>
                           )}
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -500,14 +533,13 @@ export default function AdminDashboard() {
                       <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{vendor.serviceType}</td>
                       <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{vendor.location}</td>
                       <td className="px-6 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          vendor.status === "APPROVED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                          vendor.status === "BLOCKED" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${vendor.status === "APPROVED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                            vendor.status === "BLOCKED" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                              "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                          }`}>
                           {vendor.status}
                         </span>
-                       </td>
+                      </td>
                       <td className="px-6 py-3">
                         <div className="flex gap-2">
                           {vendor.status === "PENDING" && (
@@ -538,8 +570,8 @@ export default function AdminDashboard() {
                             </button>
                           )}
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -575,17 +607,16 @@ export default function AdminDashboard() {
                       <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{org.email}</td>
                       <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{org._count?.organizedEvents || 0}</td>
                       <td className="px-6 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          org.status === "APPROVED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                          org.status === "BLOCKED" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${org.status === "APPROVED" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                            org.status === "BLOCKED" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                              "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                          }`}>
                           {org.status}
                         </span>
-                       </td>
+                      </td>
                       <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">
                         {new Date(org.createdAt).toLocaleDateString()}
-                       </td>
+                      </td>
                       <td className="px-6 py-3">
                         <div className="flex gap-2">
                           {org.status === "PENDING" && (
@@ -616,8 +647,8 @@ export default function AdminDashboard() {
                             </button>
                           )}
                         </div>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>

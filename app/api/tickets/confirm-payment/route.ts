@@ -1,3 +1,5 @@
+// app/api/tickets/confirm-payment/route.ts
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -70,12 +72,17 @@ export async function POST(request: Request) {
       Number(paymentTransaction.amount),
     );
 
-    // ✅ Store returnUrl in transaction for later use
+    // ✅ FIX: Preserve existing gatewayResponse (including reservationId)
+    const existingGatewayResponse = paymentTransaction.gatewayResponse as any || {};
+    console.log("📍 [confirm-payment] Existing gatewayResponse:", existingGatewayResponse);
+
+    // ✅ Store returnUrl in transaction while preserving existing data
     await prisma.paymentTransaction.update({
       where: { id: paymentTransaction.id },
       data: {
         gatewayResponse: {
-          returnUrl: callbackUrl, // This is the ngrok URL
+          ...existingGatewayResponse,  // Keep reservationId and other fields
+          returnUrl: callbackUrl,
           initiatedAt: new Date().toISOString(),
         },
       },

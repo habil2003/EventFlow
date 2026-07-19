@@ -19,8 +19,11 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    // Build where clause
-    const where: any = {};
+    // Build where clause - exclude individual payouts that are part of a bulk
+    const where: any = {
+      // ✅ Exclude individual payouts that are linked to a bulk payout
+      bulkPayoutId: null,
+    };
 
     if (status && status !== 'ALL') {
       where.status = status;
@@ -68,6 +71,17 @@ export async function GET(request: Request) {
           admin: {
             select: { name: true, email: true },
           },
+          // ✅ Include child payouts for bulk
+          childPayouts: {
+            include: {
+              ticketBooking: {
+                include: {
+                  user: true,
+                  event: true,
+                },
+              },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -79,15 +93,15 @@ export async function GET(request: Request) {
     // Calculate summary
     const summary = await prisma.$transaction([
       prisma.payout.aggregate({
-        where: { status: 'COMPLETED' },
+        where: { status: 'COMPLETED', bulkPayoutId: null },
         _sum: { amount: true, platformCommission: true, vendorPayout: true },
       }),
       prisma.payout.aggregate({
-        where: { status: 'PENDING' },
+        where: { status: 'PENDING', bulkPayoutId: null },
         _sum: { amount: true },
       }),
       prisma.payout.aggregate({
-        where: { status: 'PROCESSING' },
+        where: { status: 'PROCESSING', bulkPayoutId: null },
         _sum: { amount: true },
       }),
     ]);
@@ -114,6 +128,10 @@ export async function GET(request: Request) {
         eventTitle = p.ticketBooking.event.title;
       }
 
+      // ✅ Check if this is a bulk payout
+      const isBulk = p.type === 'TICKET_SALES_BULK';
+      const ticketCount = p.childPayouts?.length || 0;
+
       return {
         id: p.id,
         amount: Number(p.amount),
@@ -132,6 +150,16 @@ export async function GET(request: Request) {
         khaltiPayoutId: p.khaltiPayoutId,
         vendorBookingId: p.bookingId,
         ticketBookingId: p.ticketBookingId,
+        // ✅ Bulk-specific fields
+        isBulk,
+        ticketCount,
+        childPayouts: p.childPayouts?.map(child => ({
+          id: child.id,
+          amount: Number(child.amount),
+          vendorPayout: Number(child.vendorPayout),
+          customerName: child.ticketBooking?.user?.name || 'Unknown',
+          ticketNumber: child.ticketBooking?.ticketNumber || 'N/A',
+        })) || [],
       };
     });
 
@@ -150,9 +178,9 @@ export async function GET(request: Request) {
         totalPaid: Number(summary[0]._sum.vendorPayout || 0),
         totalPending: Number(summary[1]._sum.amount || 0),
         totalProcessing: Number(summary[2]._sum.amount || 0),
-        countCompleted: await prisma.payout.count({ where: { status: 'COMPLETED' } }),
-        countPending: await prisma.payout.count({ where: { status: 'PENDING' } }),
-        countProcessing: await prisma.payout.count({ where: { status: 'PROCESSING' } }),
+        countCompleted: await prisma.payout.count({ where: { status: 'COMPLETED', bulkPayoutId: null } }),
+        countPending: await prisma.payout.count({ where: { status: 'PENDING', bulkPayoutId: null } }),
+        countProcessing: await prisma.payout.count({ where: { status: 'PROCESSING', bulkPayoutId: null } }),
       },
     });
   } catch (error) {

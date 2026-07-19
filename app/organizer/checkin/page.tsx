@@ -18,6 +18,9 @@ import {
   ClipboardDocumentIcon,
   BeakerIcon,
   XMarkIcon,
+  ClockIcon,
+  VideoCameraIcon,
+  VideoCameraSlashIcon,
 } from "@heroicons/react/24/outline";
 
 // ============================================
@@ -30,7 +33,7 @@ interface Event {
   eventDate: string;
   eventTime: string;
   location: string;
-  isCompleted?: boolean;  // ✅ ADDED
+  isCompleted?: boolean;
 }
 
 interface Ticket {
@@ -44,6 +47,7 @@ interface Ticket {
     name: string;
   };
   checkedIn: boolean;
+  checkedInAt?: string | null;
 }
 
 interface CheckinResponse {
@@ -99,11 +103,21 @@ function CheckinContent() {
   const [recentCheckIns, setRecentCheckIns] = useState<any[]>([]);
   const [lastScanResult, setLastScanResult] = useState<{ data: string; time: string } | null>(null);
 
+  // ✅ Camera State
+  const [isCameraOn, setIsCameraOn] = useState(true);
+  const [isCameraSupported, setIsCameraSupported] = useState(true);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [scannerKey, setScannerKey] = useState(0); // ✅ Used to force re-mount scanner
+
   // Manual Check-in
   const [manualInput, setManualInput] = useState("");
-  const [manualInputType, setManualInputType] = useState<"email" | "ticketNumber">("ticketNumber");
   const [uncheckedTickets, setUncheckedTickets] = useState<Ticket[]>([]);
   const [showTicketList, setShowTicketList] = useState(false);
+
+  // Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [modalMessage, setModalMessage] = useState<MessageState | null>(null);
 
   // Test Mode
   const [testMode, setTestMode] = useState(false);
@@ -111,6 +125,7 @@ function CheckinContent() {
 
   // Refs
   const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const modalMessageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const statsIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // ============================================
@@ -127,12 +142,37 @@ function CheckinContent() {
   }, [status, session, router]);
 
   // ============================================
+  // CHECK CAMERA SUPPORT
+  // ============================================
+
+  useEffect(() => {
+    const checkCameraSupport = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(device => device.kind === 'videoinput');
+        setIsCameraSupported(hasCamera);
+        if (!hasCamera) {
+          setCameraError('No camera detected on this device');
+          setIsCameraOn(false);
+        }
+      } catch (error) {
+        console.error('Error checking camera support:', error);
+        setIsCameraSupported(false);
+        setCameraError('Unable to access camera');
+        setIsCameraOn(false);
+      }
+    };
+    checkCameraSupport();
+  }, []);
+
+  // ============================================
   // CLEANUP
   // ============================================
 
   useEffect(() => {
     return () => {
       if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current);
+      if (modalMessageTimeoutRef.current) clearTimeout(modalMessageTimeoutRef.current);
       if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
     };
   }, []);
@@ -158,7 +198,6 @@ function CheckinContent() {
         const eventsArray = Array.isArray(data) ? data : [];
         setEvents(eventsArray);
 
-        // Auto-select event from URL or first event
         const eventId = searchParams.get("eventId");
         if (eventId && eventsArray.some((e: Event) => e.id === eventId)) {
           setSelectedEvent(eventId);
@@ -207,6 +246,34 @@ function CheckinContent() {
   }, [selectedEvent, fetchStats]);
 
   // ============================================
+  // MESSAGE HELPERS
+  // ============================================
+
+  const showMessage = useCallback((
+    text: string,
+    type: MessageState["type"],
+    remainingTickets?: number
+  ) => {
+    if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current);
+    setMessage({ text, type, remainingTickets });
+    messageTimeoutRef.current = setTimeout(() => {
+      setMessage(null);
+    }, 5000);
+  }, []);
+
+  const showModalMessage = useCallback((
+    text: string,
+    type: MessageState["type"],
+    remainingTickets?: number
+  ) => {
+    if (modalMessageTimeoutRef.current) clearTimeout(modalMessageTimeoutRef.current);
+    setModalMessage({ text, type, remainingTickets });
+    modalMessageTimeoutRef.current = setTimeout(() => {
+      setModalMessage(null);
+    }, 3000);
+  }, []);
+
+  // ============================================
   // FETCH UNCHECKED TICKETS
   // ============================================
 
@@ -233,23 +300,7 @@ function CheckinContent() {
       console.error("Error fetching tickets:", error);
       showMessage("Network error. Please try again.", "error");
     }
-  }, [selectedEvent]);
-
-  // ============================================
-  // MESSAGE HELPER
-  // ============================================
-
-  const showMessage = useCallback((
-    text: string,
-    type: MessageState["type"],
-    remainingTickets?: number
-  ) => {
-    if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current);
-    setMessage({ text, type, remainingTickets });
-    messageTimeoutRef.current = setTimeout(() => {
-      setMessage(null);
-    }, 5000);
-  }, []);
+  }, [selectedEvent, showMessage]);
 
   // ============================================
   // QR CHECK-IN
@@ -257,7 +308,6 @@ function CheckinContent() {
 
   const processQRCheckin = useCallback(async (qrData: string) => {
     console.log("🔍 QR Data received:", qrData.substring(0, 50) + "...");
-    console.log("📏 QR Data length:", qrData.length);
 
     setLastScanResult({
       data: qrData.substring(0, 100) + (qrData.length > 100 ? "..." : ""),
@@ -285,10 +335,19 @@ function CheckinContent() {
       console.log("📡 API Response:", data);
 
       if (data.success) {
-        showMessage(data.message, "success", data.remainingTickets);
+        let successMessage = data.message;
+        if (data.alreadyCheckedIn) {
+          successMessage = `✅ Ticket ${data.attendee?.ticketNumber || ''} was already checked in at ${data.checkedInAt ? new Date(data.checkedInAt).toLocaleTimeString() : 'earlier'}`;
+        } else {
+          successMessage = `✅ ${data.attendee?.name || 'Attendee'} checked in successfully!`;
+        }
+        showMessage(successMessage, "success", data.remainingTickets);
         await fetchStats();
+        if (showTicketList) {
+          setShowTicketList(false);
+          setManualInput("");
+        }
       } else {
-        // Special handling for event mismatch
         if (data.ticketEventTitle) {
           showMessage(
             `❌ This ticket belongs to "${data.ticketEventTitle}". Please select the correct event.`,
@@ -304,10 +363,175 @@ function CheckinContent() {
     } finally {
       setCheckingIn(false);
     }
-  }, [selectedEvent, showMessage, fetchStats]);
+  }, [selectedEvent, showMessage, fetchStats, showTicketList]);
 
   // ============================================
-  // SCAN HANDLERS (STABLE REFERENCES)
+  // OPEN TICKET IN MODAL
+  // ============================================
+
+  const openTicketModal = useCallback((ticket: Ticket) => {
+    setSelectedTicket(ticket);
+    setModalMessage(null);
+    setShowModal(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setShowModal(false);
+    setSelectedTicket(null);
+    setModalMessage(null);
+  }, []);
+
+  // ============================================
+  // CHECK IN TICKET FROM MODAL
+  // ============================================
+
+  const checkInTicketFromModal = useCallback(async (ticketId: string, ticketNumber: string) => {
+    if (!selectedEvent) return;
+
+    setCheckingIn(true);
+    setModalMessage(null);
+
+    try {
+      const response = await fetch("/api/organizer/checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: selectedEvent,
+          ticketId: ticketId,
+        }),
+      });
+
+      const data: CheckinResponse = await response.json();
+
+      if (data.success) {
+        let successMessage = data.message;
+        if (data.alreadyCheckedIn) {
+          successMessage = `✅ Ticket ${ticketNumber} was already checked in at ${data.checkedInAt ? new Date(data.checkedInAt).toLocaleTimeString() : 'earlier'}`;
+        } else {
+          successMessage = `✅ Ticket ${ticketNumber} checked in successfully!`;
+        }
+        
+        setUncheckedTickets(prev => 
+          prev.map(t => 
+            t.id === ticketId 
+              ? { ...t, checkedIn: true, checkedInAt: new Date().toISOString() }
+              : t
+          )
+        );
+        
+        setSelectedTicket(prev => 
+          prev 
+            ? { ...prev, checkedIn: true, checkedInAt: new Date().toISOString() }
+            : null
+        );
+        
+        showModalMessage(successMessage, "success", data.remainingTickets);
+        await fetchStats();
+        
+        if (data.isLastTicket) {
+          setTimeout(() => {
+            closeModal();
+            setShowTicketList(false);
+            setManualInput("");
+          }, 1500);
+        }
+      } else {
+        showModalMessage(data.message || "Check-in failed", "error");
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      showModalMessage("Error processing check-in", "error");
+    } finally {
+      setCheckingIn(false);
+    }
+  }, [selectedEvent, fetchStats, closeModal, showModalMessage]);
+
+  // ============================================
+  // CHECK IN ALL TICKETS FOR A USER
+  // ============================================
+
+  const checkInAllTickets = useCallback(async () => {
+    if (!selectedEvent || uncheckedTickets.length === 0) return;
+
+    const unchecked = uncheckedTickets.filter(t => !t.checkedIn);
+    if (unchecked.length === 0) {
+      showModalMessage("All tickets are already checked in!", "info");
+      return;
+    }
+
+    if (!confirm(`Check in all ${unchecked.length} tickets for this user?`)) {
+      return;
+    }
+
+    setCheckingIn(true);
+    setModalMessage(null);
+
+    try {
+      let successCount = 0;
+      let alreadyCheckedCount = 0;
+      let failCount = 0;
+
+      for (const ticket of unchecked) {
+        const response = await fetch("/api/organizer/checkin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: selectedEvent,
+            ticketId: ticket.id,
+          }),
+        });
+
+        const data: CheckinResponse = await response.json();
+        if (data.success) {
+          if (data.alreadyCheckedIn) {
+            alreadyCheckedCount++;
+          } else {
+            successCount++;
+          }
+          setUncheckedTickets(prev => 
+            prev.map(t => 
+              t.id === ticket.id 
+                ? { ...t, checkedIn: true, checkedInAt: new Date().toISOString() }
+                : t
+            )
+          );
+        } else {
+          failCount++;
+        }
+      }
+
+      await fetchStats();
+      
+      let messageText = '';
+      if (successCount > 0 && alreadyCheckedCount > 0) {
+        messageText = `✅ ${successCount} checked in, ${alreadyCheckedCount} already checked in`;
+      } else if (successCount > 0) {
+        messageText = `✅ ${successCount} tickets checked in successfully!`;
+      } else if (alreadyCheckedCount > 0) {
+        messageText = `ℹ️ All ${alreadyCheckedCount} tickets were already checked in`;
+      } else {
+        messageText = `❌ Failed to check in tickets`;
+      }
+      
+      showModalMessage(messageText, successCount > 0 ? "success" : "warning");
+      
+      if (failCount === 0 && successCount > 0) {
+        setTimeout(() => {
+          closeModal();
+          setShowTicketList(false);
+          setManualInput("");
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      showModalMessage("Error processing check-in", "error");
+    } finally {
+      setCheckingIn(false);
+    }
+  }, [selectedEvent, uncheckedTickets, fetchStats, closeModal, showModalMessage]);
+
+  // ============================================
+  // SCAN HANDLERS
   // ============================================
 
   const handleScanSuccess = useCallback((decodedText: string) => {
@@ -317,11 +541,25 @@ function CheckinContent() {
 
   const handleScanError = useCallback((error: string) => {
     console.error("❌ Scanner error:", error);
-    showMessage(`Scanner error: ${error}`, "error");
-  }, [showMessage]);
+  }, []);
 
   // ============================================
-  // MANUAL CHECK-IN HANDLERS
+  // ✅ TOGGLE CAMERA - Resets scanner by changing key
+  // ============================================
+
+  const toggleCamera = useCallback(() => {
+    setIsCameraOn(prev => {
+      const newState = !prev;
+      // ✅ If turning on, force scanner re-mount
+      if (newState) {
+        setScannerKey(prevKey => prevKey + 1);
+      }
+      return newState;
+    });
+  }, []);
+
+  // ============================================
+  // MANUAL CHECK-IN HANDLER
   // ============================================
 
   const handleManualCheckin = useCallback(async () => {
@@ -349,7 +587,13 @@ function CheckinContent() {
       const data: CheckinResponse = await response.json();
 
       if (data.success) {
-        showMessage(data.message, "success", data.remainingTickets);
+        let successMessage = data.message;
+        if (data.alreadyCheckedIn) {
+          successMessage = `✅ Ticket ${manualInput} was already checked in at ${data.checkedInAt ? new Date(data.checkedInAt).toLocaleTimeString() : 'earlier'}`;
+        } else {
+          successMessage = `✅ ${data.attendee?.name || 'Attendee'} checked in successfully!`;
+        }
+        showMessage(successMessage, "success", data.remainingTickets);
         await fetchStats();
         setManualInput("");
       } else {
@@ -363,45 +607,6 @@ function CheckinContent() {
     }
   }, [selectedEvent, manualInput, showMessage, fetchStats, fetchUncheckedTickets]);
 
-  const checkInTicketById = useCallback(async (ticketId: string, ticketNumber: string) => {
-    setCheckingIn(true);
-    try {
-      const response = await fetch("/api/organizer/checkin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId: selectedEvent,
-          ticketId: ticketId,
-        }),
-      });
-
-      const data: CheckinResponse = await response.json();
-
-      if (data.success) {
-        showMessage(`✅ Checked in ticket ${ticketNumber}`, "success", data.remainingTickets);
-        await fetchStats();
-        setShowTicketList(false);
-        setManualInput("");
-      } else {
-        showMessage(data.message || "Check-in failed", "error");
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      showMessage("Error processing check-in", "error");
-    } finally {
-      setCheckingIn(false);
-    }
-  }, [selectedEvent, showMessage, fetchStats]);
-
-  // ============================================
-  // UTILITY FUNCTIONS
-  // ============================================
-
-  const copyTicketId = useCallback((ticketId: string) => {
-    navigator.clipboard.writeText(ticketId);
-    showMessage("Ticket ID copied!", "success");
-  }, [showMessage]);
-
   const handleTestScan = useCallback(async () => {
     if (!testQRData) {
       showMessage("Please enter QR data to test", "error");
@@ -411,18 +616,7 @@ function CheckinContent() {
   }, [testQRData, processQRCheckin, showMessage]);
 
   // ============================================
-  // ✅ MEMOIZE SCANNER TO PREVENT REMOUNTING
-  // ============================================
-
-  const scannerComponent = useMemo(() => (
-    <ModernQrScanner
-      onScanSuccess={handleScanSuccess}
-      onError={handleScanError}
-    />
-  ), [handleScanSuccess, handleScanError]);
-
-  // ============================================
-  // ✅ GET SELECTED EVENT DATA
+  // GET SELECTED EVENT DATA
   // ============================================
 
   const selectedEventData = events.find((e) => e.id === selectedEvent);
@@ -455,7 +649,6 @@ function CheckinContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
 
-      {/* Main Content */}
       <main className="mx-auto max-w-5xl px-3 sm:px-4 py-6 sm:py-12 lg:px-8">
         
         {/* Header */}
@@ -520,7 +713,7 @@ function CheckinContent() {
           </select>
         </div>
 
-        {/* ✅ Event Completed Warning */}
+        {/* Event Completed Warning */}
         {isEventCompleted && (
           <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
             <div className="flex items-center gap-3">
@@ -592,13 +785,40 @@ function CheckinContent() {
               {/* QR Scanner Section */}
               <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                 <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 sm:px-6 py-3 sm:py-4">
-                  <h2 className="text-base sm:text-xl font-bold text-white flex items-center">
-                    <CameraIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-                    QR Code Scanner
-                  </h2>
-                  <p className="text-white/70 text-xs mt-1">
-                    {isEventCompleted ? "Check-in unavailable" : "Scan individual ticket QR codes"}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base sm:text-xl font-bold text-white flex items-center">
+                        <CameraIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                        QR Code Scanner
+                      </h2>
+                      <p className="text-white/70 text-xs mt-1">
+                        {isEventCompleted ? "Check-in unavailable" : "Scan individual ticket QR codes"}
+                      </p>
+                    </div>
+                    {/* ✅ Camera Toggle Button */}
+                    {!isEventCompleted && isCameraSupported && (
+                      <button
+                        onClick={toggleCamera}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          isCameraOn
+                            ? "bg-white/20 text-white hover:bg-white/30"
+                            : "bg-red-500/80 text-white hover:bg-red-600"
+                        }`}
+                      >
+                        {isCameraOn ? (
+                          <>
+                            <VideoCameraIcon className="h-4 w-4" />
+                            <span className="hidden sm:inline">On</span>
+                          </>
+                        ) : (
+                          <>
+                            <VideoCameraSlashIcon className="h-4 w-4" />
+                            <span className="hidden sm:inline">Off</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="p-4 sm:p-6">
@@ -612,26 +832,53 @@ function CheckinContent() {
                         No check-in available for completed events
                       </p>
                     </div>
+                  ) : !isCameraSupported ? (
+                    <div className="flex flex-col items-center justify-center h-[350px] bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                      <CameraIcon className="h-12 w-12 text-red-400 mb-3" />
+                      <p className="text-red-600 dark:text-red-400 text-sm font-medium">
+                        {cameraError || "Camera not available"}
+                      </p>
+                      <p className="text-xs text-red-500 dark:text-red-300 mt-1">
+                        Please check your camera permissions or use manual check-in
+                      </p>
+                    </div>
                   ) : (
-                    <div className="rounded-lg overflow-hidden bg-gray-900">
-                      {scannerComponent}
-                    </div>
+                    <>
+                      <div className="rounded-lg overflow-hidden bg-gray-900 relative">
+                        {isCameraOn ? (
+                          // ✅ Use key to force re-mount when toggling on
+                          <ModernQrScanner
+                            key={scannerKey}
+                            onScanSuccess={handleScanSuccess}
+                            onError={handleScanError}
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-[350px] bg-gray-800 rounded-lg">
+                            <VideoCameraSlashIcon className="h-16 w-16 text-gray-500 mb-3" />
+                            <p className="text-gray-400 text-sm font-medium">Camera is off</p>
+                            <p className="text-xs text-gray-500 mt-1">Click the toggle button to start scanning</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="mt-4 text-center">
+                        <div className="inline-flex items-center gap-2 text-xs text-gray-500">
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              checkingIn ? "bg-yellow-500 animate-pulse" : isCameraOn ? "bg-green-500" : "bg-gray-400"
+                            }`}
+                          ></div>
+                          {checkingIn
+                            ? "Processing..."
+                            : isEventCompleted
+                            ? "Check-in disabled"
+                            : isCameraOn
+                            ? "Camera ready - scan each ticket's unique QR code"
+                            : "Camera paused"}
+                        </div>
+                      </div>
+                    </>
                   )}
-                  
-                  <div className="mt-4 text-center">
-                    <div className="inline-flex items-center gap-2 text-xs text-gray-500">
-                      <div
-                        className={`w-2 h-2 rounded-full ${
-                          checkingIn ? "bg-yellow-500 animate-pulse" : "bg-green-500"
-                        }`}
-                      ></div>
-                      {checkingIn
-                        ? "Processing..."
-                        : isEventCompleted
-                        ? "Check-in disabled"
-                        : "Camera ready - scan each ticket's unique QR code"}
-                    </div>
-                  </div>
 
                   {lastScanResult && (
                     <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -646,7 +893,7 @@ function CheckinContent() {
                 </div>
               </div>
 
-              {/* Test Mode Section - Hide if completed */}
+              {/* Test Mode Section */}
               {!isEventCompleted && testMode && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl sm:rounded-2xl border-2 border-yellow-300 dark:border-yellow-700 p-4 sm:p-6">
                   <div className="flex items-center justify-between mb-3">
@@ -680,52 +927,26 @@ function CheckinContent() {
                       {checkingIn ? "Testing..." : "Test"}
                     </button>
                   </div>
-                  <p className="text-[10px] text-yellow-500 dark:text-yellow-400 mt-2">
-                    💡 Get QR data from browser console on ticket page
-                  </p>
                 </div>
               )}
 
-              {/* Manual Check-in - Hide if completed */}
+              {/* Manual Check-in */}
               {!isEventCompleted && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 sm:p-6">
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white mb-2 sm:mb-3">
                     Manual Check-in
                   </h3>
-
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={() => setManualInputType("ticketNumber")}
-                      className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                        manualInputType === "ticketNumber"
-                          ? "bg-indigo-600 text-white"
-                          : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                      }`}
-                    >
-                      Ticket Number
-                    </button>
-                    <button
-                      onClick={() => setManualInputType("email")}
-                      className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
-                        manualInputType === "email"
-                          ? "bg-indigo-600 text-white"
-                          : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
-                      }`}
-                    >
-                      Email Address
-                    </button>
-                  </div>
+                  <p className="text-xs text-gray-400 mb-3">
+                    💡 Enter ticket number OR email address (auto-detected)
+                  </p>
 
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
-                      type={manualInputType === "email" ? "email" : "text"}
-                      placeholder={
-                        manualInputType === "email"
-                          ? "Enter attendee email"
-                          : "Enter ticket number (e.g., TKT-xxxxx)"
-                      }
+                      type="text"
+                      placeholder="Enter ticket number or email address"
                       value={manualInput}
                       onChange={(e) => setManualInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleManualCheckin()}
                       className="flex-1 px-3 py-2 sm:px-4 sm:py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white font-mono"
                     />
                     <button
@@ -733,84 +954,77 @@ function CheckinContent() {
                       disabled={checkingIn}
                       className="px-4 py-2 sm:px-6 sm:py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                     >
-                      {checkingIn
-                        ? "Processing..."
-                        : manualInputType === "email"
-                        ? "Find Tickets"
-                        : "Check In"}
+                      {checkingIn ? "Processing..." : "Check In / Find"}
                     </button>
                   </div>
-
-                  {manualInputType === "email" && (
-                    <p className="text-xs text-gray-400 mt-2">
-                      💡 Enter email to see all unchecked tickets for this user
-                    </p>
-                  )}
-                  {manualInputType === "ticketNumber" && (
-                    <p className="text-xs text-gray-400 mt-2">
-                      💡 Enter the unique ticket number found on the ticket
-                    </p>
-                  )}
                 </div>
               )}
 
               {/* Unchecked Tickets List */}
               {!isEventCompleted && showTicketList && uncheckedTickets.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                  <div className="bg-gradient-to-r from-yellow-500 to-orange-500 px-4 sm:px-6 py-3">
-                    <h3 className="text-sm font-semibold text-white flex items-center">
-                      <TicketIcon className="h-4 w-4 mr-2" />
-                      Unchecked Tickets ({uncheckedTickets.length})
-                    </h3>
-                    <p className="text-white/70 text-xs">
-                      Select which ticket to check in
-                    </p>
+                  <div className="bg-gradient-to-r from-yellow-500 to-orange-500 px-4 sm:px-6 py-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white flex items-center">
+                        <TicketIcon className="h-4 w-4 mr-2" />
+                        Unchecked Tickets ({uncheckedTickets.filter(t => !t.checkedIn).length})
+                      </h3>
+                      <p className="text-white/70 text-xs">
+                        Select a ticket to check in or view details
+                      </p>
+                    </div>
+                    {uncheckedTickets.filter(t => !t.checkedIn).length > 1 && (
+                      <button
+                        onClick={checkInAllTickets}
+                        disabled={checkingIn}
+                        className="px-3 py-1.5 bg-white text-yellow-600 text-xs font-medium rounded-lg hover:bg-yellow-50 transition-colors disabled:opacity-50"
+                      >
+                        Check In All
+                      </button>
+                    )}
                   </div>
-                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                    {uncheckedTickets.map((ticket) => (
-                      <div key={ticket.id} className="p-4 flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            {ticket.user?.name || "Unknown"}
-                          </p>
-                          <p className="text-xs text-gray-500 font-mono">
-                            {ticket.ticketNumber}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {ticket.ticketTier?.name || "Standard"}
-                          </p>
-                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                            ID: {ticket.id.substring(0, 8)}...
-                          </p>
+                  <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-64 overflow-y-auto">
+                    {uncheckedTickets.map((ticket) => {
+                      const isCheckedIn = ticket.checkedIn;
+                      return (
+                        <div key={ticket.id} className="p-4 flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {ticket.user?.name || "Unknown"}
+                            </p>
+                            <p className="text-xs text-gray-500 font-mono">
+                              {ticket.ticketNumber}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {ticket.ticketTier?.name || "Standard"}
+                            </p>
+                            {isCheckedIn && (
+                              <span className="inline-flex items-center gap-1 text-xs text-green-600 mt-1">
+                                <CheckCircleIcon className="h-3 w-3" />
+                                Already checked in
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openTicketModal(ticket)}
+                              className="px-3 py-1.5 text-xs text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                            >
+                              View
+                            </button>
+                            {!isCheckedIn && (
+                              <button
+                                onClick={() => checkInTicketFromModal(ticket.id, ticket.ticketNumber)}
+                                disabled={checkingIn}
+                                className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                              >
+                                Check In
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(ticket.ticketNumber);
-                              showMessage("Ticket number copied!", "success");
-                            }}
-                            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            title="Copy ticket number"
-                          >
-                            <ClipboardDocumentIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => copyTicketId(ticket.id)}
-                            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            title="Copy ticket ID"
-                          >
-                            <InformationCircleIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => checkInTicketById(ticket.id, ticket.ticketNumber)}
-                            disabled={checkingIn}
-                            className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            Check In
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -872,9 +1086,9 @@ function CheckinContent() {
                     Recent Check-ins
                   </h3>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {recentCheckIns.map((checkin) => (
+                    {recentCheckIns.map((checkin, index) => (
                       <div
-                        key={checkin.id}
+                        key={index}
                         className="flex justify-between items-center text-xs sm:text-sm border-b border-gray-100 dark:border-gray-700 pb-2"
                       >
                         <div>
@@ -900,6 +1114,146 @@ function CheckinContent() {
           </div>
         )}
       </main>
+
+      {/* Ticket Detail Modal */}
+      {showModal && selectedTicket && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-90 transition-opacity"
+              onClick={closeModal}
+            />
+
+            <div className="relative inline-block transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+              <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Ticket Details</h3>
+                  <p className="text-white/70 text-sm">Ticket #{selectedTicket.ticketNumber}</p>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="p-1 rounded-lg hover:bg-white/20 transition-colors"
+                >
+                  <XMarkIcon className="h-5 w-5 text-white" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {/* Modal Message */}
+                {modalMessage && (
+                  <div className={`p-3 rounded-lg ${
+                    modalMessage.type === 'success' 
+                      ? 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400'
+                      : modalMessage.type === 'warning'
+                      ? 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-400'
+                      : modalMessage.type === 'info'
+                      ? 'bg-blue-50 border border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400'
+                      : 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {modalMessage.type === 'success' ? (
+                        <CheckCircleIcon className="h-5 w-5" />
+                      ) : modalMessage.type === 'warning' ? (
+                        <InformationCircleIcon className="h-5 w-5" />
+                      ) : modalMessage.type === 'info' ? (
+                        <InformationCircleIcon className="h-5 w-5" />
+                      ) : (
+                        <XCircleIcon className="h-5 w-5" />
+                      )}
+                      <span>{modalMessage.text}</span>
+                    </div>
+                    {modalMessage.remainingTickets !== undefined && modalMessage.remainingTickets > 0 && (
+                      <p className="text-xs mt-1 text-gray-600">
+                        ⚠️ This user has {modalMessage.remainingTickets} more ticket(s) to check in
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Ticket Details */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span className="text-sm text-gray-500">Ticket Number</span>
+                    <span className="text-sm font-mono font-medium text-gray-900 dark:text-white">
+                      {selectedTicket.ticketNumber}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span className="text-sm text-gray-500">Customer</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {selectedTicket.user?.name || "Unknown"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span className="text-sm text-gray-500">Email</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {selectedTicket.user?.email || "Unknown"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span className="text-sm text-gray-500">Ticket Type</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">
+                      {selectedTicket.ticketTier?.name || "Standard"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-gray-500">Status</span>
+                    <span className={`text-sm font-medium ${
+                      selectedTicket.checkedIn ? 'text-green-600' : 'text-yellow-600'
+                    }`}>
+                      {selectedTicket.checkedIn ? (
+                        <span className="flex items-center gap-1">
+                          <CheckCircleIcon className="h-4 w-4" />
+                          Checked In {selectedTicket.checkedInAt && `at ${new Date(selectedTicket.checkedInAt).toLocaleTimeString()}`}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <ClockIcon className="h-4 w-4" />
+                          Pending
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 mt-6">
+                  {!selectedTicket.checkedIn ? (
+                    <button
+                      onClick={() => checkInTicketFromModal(selectedTicket.id, selectedTicket.ticketNumber)}
+                      disabled={checkingIn}
+                      className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {checkingIn ? (
+                        <>
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                          Checking In...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircleIcon className="h-5 w-5" />
+                          Check In
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="flex-1 py-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold rounded-lg flex items-center justify-center gap-2">
+                      <CheckCircleIcon className="h-5 w-5" />
+                      Already Checked In
+                    </div>
+                  )}
+                  <button
+                    onClick={closeModal}
+                    className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
