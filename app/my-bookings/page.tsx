@@ -124,17 +124,40 @@ function BookingsContent() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const bookingsRes = await fetch("/api/user/vendor-bookings");
-        const bookingsData = await bookingsRes.json();
-        setBookings(bookingsData);
-
-        const eventsRes = await fetch("/api/user/social-events");
-        if (eventsRes.ok) {
-          const eventsData = await eventsRes.json();
-          setUmbrellaEvents(eventsData);
+        // ✅ Handle bookings fetch with proper error handling
+        let bookingsData = [];
+        try {
+          const bookingsRes = await fetch("/api/user/vendor-bookings");
+          if (bookingsRes.ok) {
+            bookingsData = await bookingsRes.json();
+          } else {
+            console.warn("Failed to fetch bookings:", bookingsRes.status);
+          }
+        } catch (fetchError) {
+          console.error("Error fetching bookings:", fetchError);
         }
+        // ✅ Ensure bookingsData is an array
+        setBookings(Array.isArray(bookingsData) ? bookingsData : []);
+
+        // ✅ Handle events fetch with proper error handling
+        let eventsData = [];
+        try {
+          const eventsRes = await fetch("/api/user/social-events");
+          if (eventsRes.ok) {
+            eventsData = await eventsRes.json();
+          } else {
+            console.warn("Failed to fetch events:", eventsRes.status);
+          }
+        } catch (fetchError) {
+          console.error("Error fetching events:", fetchError);
+        }
+        // ✅ Ensure eventsData is an array
+        setUmbrellaEvents(Array.isArray(eventsData) ? eventsData : []);
       } catch (error) {
         console.error("Error fetching data:", error);
+        // ✅ Set empty arrays on error
+        setBookings([]);
+        setUmbrellaEvents([]);
       } finally {
         setLoading(false);
       }
@@ -212,8 +235,11 @@ function BookingsContent() {
     }
   };
 
-  const applyFilters = (bookingsList: VendorBooking[]): VendorBooking[] =>
-    bookingsList.filter((booking) => {
+  const applyFilters = (bookingsList: VendorBooking[]): VendorBooking[] => {
+    // ✅ Ensure bookingsList is an array
+    if (!Array.isArray(bookingsList)) return [];
+    
+    return bookingsList.filter((booking) => {
       if (filters.search &&
         !booking.vendorName.toLowerCase().includes(filters.search.toLowerCase()) &&
         !booking.eventTitle.toLowerCase().includes(filters.search.toLowerCase()) &&
@@ -233,6 +259,7 @@ function BookingsContent() {
       if (filters.maxAmount && booking.totalAmount > filters.maxAmount) return false;
       return true;
     });
+  };
 
   const resetFilters = () => {
     const empty: FilterState = {
@@ -302,12 +329,19 @@ function BookingsContent() {
     return 0;
   };
 
-  const upcomingBaseBookings = bookings.filter(
-    (b) => !isEventPast(b.eventDate) && b.bookingStatus !== "DECLINED" && b.bookingStatus !== "COMPLETED"
-  );
-  const pastBaseBookings = bookings.filter(
-    (b) => isEventPast(b.eventDate) || b.bookingStatus === "COMPLETED" || b.bookingStatus === "DECLINED"
-  );
+  // ✅ FIXED: Ensure bookings is an array before filtering
+  const upcomingBaseBookings = Array.isArray(bookings) 
+    ? bookings.filter(
+        (b) => !isEventPast(b.eventDate) && b.bookingStatus !== "DECLINED" && b.bookingStatus !== "COMPLETED"
+      )
+    : [];
+
+  const pastBaseBookings = Array.isArray(bookings)
+    ? bookings.filter(
+        (b) => isEventPast(b.eventDate) || b.bookingStatus === "COMPLETED" || b.bookingStatus === "DECLINED"
+      )
+    : [];
+
   const upcomingBookings = applyFilters(upcomingBaseBookings);
   const pastBookings = applyFilters(pastBaseBookings);
 

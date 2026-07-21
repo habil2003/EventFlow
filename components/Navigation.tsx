@@ -99,7 +99,6 @@ export default function Navigation() {
         { href: '/admin/escrow', label: 'Escrow', icon: CurrencyRupeeIcon },
         { href: '/admin/refunds', label: 'Refunds', icon: BanknotesIcon },
         { href: '/admin/approvals', label: 'Approvals', icon: ClockIcon },
-        { href: '/admin/analytics', label: 'Analytics', icon: ChartBarIcon },
         ...commonLinks,
       ];
     }

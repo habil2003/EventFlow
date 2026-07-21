@@ -1,3 +1,5 @@
+// app/api/admin/verify-payout/route.ts
+
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -38,6 +40,23 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // Validate transferMethod
+    const allowedMethods = ['BANK_TRANSFER', 'CASH', 'CHEQUE'];
+    if (!transferMethod || !allowedMethods.includes(transferMethod)) {
+      return NextResponse.json({ 
+        error: `Invalid transferMethod. Allowed: ${allowedMethods.join(', ')}` 
+      }, { status: 400 });
+    }
+
+    // Basic URL validation for proofImageUrl
+    try {
+      new URL(proofImageUrl);
+    } catch {
+      return NextResponse.json({ 
+        error: 'Invalid proofImageUrl format' 
+      }, { status: 400 });
+    }
+
     // Get the pending payout
     const payout = await prisma.payout.findUnique({
       where: { id: payoutId },
@@ -69,7 +88,7 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Update payout as COMPLETED with proof
+    // ✅ Update payout as COMPLETED with proof image in notes
     const updatedPayout = await prisma.payout.update({
       where: { id: payoutId },
       data: {

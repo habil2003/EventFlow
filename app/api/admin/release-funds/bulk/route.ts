@@ -1,22 +1,22 @@
 // app/api/admin/release-funds/bulk/route.ts
 
-import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 // Helper function to get platform commission rate
 async function getPlatformCommissionRate(): Promise<number> {
-  return Number(process.env.PLATFORM_COMMISSION || '0.1');
+  return Number(process.env.PLATFORM_COMMISSION || "0.1");
 }
 
 // Helper function to release a single ticket funds
 async function releaseSingleTicketFunds(
-  bookingId: string, 
-  adminId: string, 
+  bookingId: string,
+  adminId: string,
   adminEmail: string,
   eventTitle: string,
-  bulkPayoutId?: string
+  bulkPayoutId?: string,
 ) {
   const ticketBooking = await prisma.ticketBooking.findUnique({
     where: { id: bookingId },
@@ -43,25 +43,31 @@ async function releaseSingleTicketFunds(
 
   // Check if event is completed
   if (!ticketBooking.event.isCompleted) {
-    throw new Error(`Event ${ticketBooking.event.title} has not been marked as completed`);
+    throw new Error(
+      `Event ${ticketBooking.event.title} has not been marked as completed`,
+    );
   }
 
   // Check for active refunds
-  const activeRefund = ticketBooking.refunds.find(r =>
-    ['PENDING', 'PENDING_ADMIN', 'PROCESSING'].includes(r.refundStatus)
+  const activeRefund = ticketBooking.refunds.find((r) =>
+    ["PENDING", "PENDING_ADMIN", "PROCESSING"].includes(r.refundStatus),
   );
 
   if (activeRefund) {
-    throw new Error(`Active refund in progress for ticket ${bookingId} (ID: ${activeRefund.id})`);
+    throw new Error(
+      `Active refund in progress for ticket ${bookingId} (ID: ${activeRefund.id})`,
+    );
   }
 
   // Check for existing pending payout
-  const existingPendingPayout = ticketBooking.payouts.find(p =>
-    p.type === 'TICKET_SALES' && p.status === 'PENDING'
+  const existingPendingPayout = ticketBooking.payouts.find(
+    (p) => p.type === "TICKET_SALES" && p.status === "PENDING",
   );
 
   if (existingPendingPayout) {
-    throw new Error(`Payout already pending for ticket ${bookingId} (ID: ${existingPendingPayout.id})`);
+    throw new Error(
+      `Payout already pending for ticket ${bookingId} (ID: ${existingPendingPayout.id})`,
+    );
   }
 
   const commissionRate = await getPlatformCommissionRate();
@@ -73,7 +79,7 @@ async function releaseSingleTicketFunds(
   await prisma.ticketBooking.update({
     where: { id: ticketBooking.id },
     data: {
-      paymentStatus: 'PROCESSING_PAYOUT',
+      paymentStatus: "PROCESSING_PAYOUT",
       escrowReleased: true,
       amountReleasedAt: new Date(),
     },
@@ -92,31 +98,36 @@ async function releaseSingleTicketFunds(
     organizerVendorProfile = await prisma.vendorProfile.create({
       data: {
         userId: ticketBooking.event.organizerId,
-        businessName: `${organizerUser?.name || 'Organizer'}'s Events`,
-        serviceType: 'Event Organizer',
-        location: 'Nepal',
-        description: 'Auto-created for ticket payouts',
+        businessName: `${organizerUser?.name || "Organizer"}'s Events`,
+        serviceType: "Event Organizer",
+        location: "Nepal",
+        description: "Auto-created for ticket payouts",
       },
     });
   }
 
-  // Create individual payout record
+  // Create individual payout record linked to parent
+  const payoutData: any = {
+    ticketBookingId: ticketBooking.id,
+    vendorId: organizerVendorProfile.id,
+    amount: totalAmount,
+    platformCommission: platformCommission,
+    vendorPayout: organizerPayout,
+    type: "TICKET_SALES",
+    status: "PENDING",
+    adminId: adminId,
+    processedAt: null,
+    notes: `[BULK RELEASE] Pending manual payout. Released by ${adminEmail} - Ticket sales for ${eventTitle}. Platform commission: ${platformCommission}`,
+    transactionId: `pending_bulk_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+  };
+
+  // ✅ Link to parent bulk payout using bulkPayoutId directly
+  if (bulkPayoutId) {
+    payoutData.bulkPayoutId = bulkPayoutId;
+  }
+
   const payout = await prisma.payout.create({
-    data: {
-      ticketBookingId: ticketBooking.id,
-      vendorId: organizerVendorProfile.id,
-      amount: totalAmount,
-      platformCommission: platformCommission,
-      vendorPayout: organizerPayout,
-      type: 'TICKET_SALES',
-      status: 'PENDING',
-      adminId: adminId,
-      processedAt: null,
-      notes: `[BULK RELEASE] Pending manual payout. Released by ${adminEmail} - Ticket sales for ${eventTitle}. Platform commission: ${platformCommission}`,
-      transactionId: `pending_bulk_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-      // ✅ Link to bulk payout if provided
-      ...(bulkPayoutId ? { bulkPayoutId: bulkPayoutId } : {}),
-    },
+    data: payoutData,
   });
 
   return {
@@ -126,7 +137,7 @@ async function releaseSingleTicketFunds(
     amount: totalAmount,
     netPayout: organizerPayout,
     platformCommission: platformCommission,
-    customerName: ticketBooking.user?.name || 'Unknown',
+    customerName: ticketBooking.user?.name || "Unknown",
     ticketNumber: ticketBooking.ticketNumber,
   };
 }
@@ -135,56 +146,66 @@ export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session || session.user?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session || session.user?.role !== "ADMIN") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { bookingIds, eventId } = await request.json();
+    // ✅ Remove unused eventId from destructuring
+    const { bookingIds } = await request.json();
 
-    console.log('Bulk ticket release request:', { bookingIds, eventId, admin: session.user.email });
+    console.log("Bulk ticket release request:", {
+      bookingIds,
+      admin: session.user.email,
+      count: bookingIds?.length || 0,
+    });
 
     // Validate input
     if (!bookingIds || !Array.isArray(bookingIds) || bookingIds.length === 0) {
-      return NextResponse.json({ error: 'No booking IDs provided' }, { status: 400 });
+      return NextResponse.json(
+        { error: "No booking IDs provided" },
+        { status: 400 },
+      );
     }
 
     if (bookingIds.length > 50) {
-      return NextResponse.json({ 
-        error: 'Maximum 50 ticket bookings can be released at once' 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Maximum 50 ticket bookings can be released at once",
+        },
+        { status: 400 },
+      );
     }
 
-    // Get event details first to ensure all bookings belong to the same event
+    // ✅ Get event details - organizer is the User
     const firstBooking = await prisma.ticketBooking.findUnique({
       where: { id: bookingIds[0] },
-      include: { 
+      include: {
         event: {
           include: {
-            organizer: {
-              include: {
-                user: true
-              }
-            }
-          }
+            organizer: true,
+          },
         },
-        user: true
-      }
+        // ✅ user: true - removed, not needed
+      },
     });
 
     if (!firstBooking) {
-      return NextResponse.json({ error: 'First booking not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: "First booking not found" },
+        { status: 404 },
+      );
     }
 
     const eventTitle = firstBooking.event.title;
     const organizerId = firstBooking.event.organizerId;
-    const organizerName = firstBooking.event.organizer?.user?.name || 'Organizer';
+    const organizerName = firstBooking.event.organizer?.name || "Organizer";
 
     // Verify all bookings belong to the same event and are valid
     const allBookings = await prisma.ticketBooking.findMany({
       where: {
         id: { in: bookingIds },
         eventId: firstBooking.event.id,
-        paymentStatus: 'HELD_IN_ESCROW',
+        paymentStatus: "HELD_IN_ESCROW",
         escrowReleased: false,
       },
       include: {
@@ -196,40 +217,58 @@ export async function POST(request: Request) {
     });
 
     if (allBookings.length !== bookingIds.length) {
-      const foundIds = allBookings.map(b => b.id);
-      const missingIds = bookingIds.filter(id => !foundIds.includes(id));
-      return NextResponse.json({ 
-        error: `Some bookings are invalid or already released: ${missingIds.join(', ')}` 
-      }, { status: 400 });
+      const foundIds = allBookings.map((b) => b.id);
+      const missingIds = bookingIds.filter((id) => !foundIds.includes(id));
+      return NextResponse.json(
+        {
+          error: `Some bookings are invalid or already released: ${missingIds.join(", ")}`,
+        },
+        { status: 400 },
+      );
     }
 
     // Check if event is completed
     if (!firstBooking.event.isCompleted) {
-      return NextResponse.json({ 
-        error: `Event "${eventTitle}" has not been marked as completed. Cannot release tickets.` 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: `Event "${eventTitle}" has not been marked as completed. Cannot release tickets.`,
+        },
+        { status: 400 },
+      );
     }
 
     // Check for active refunds in any booking
-    const hasActiveRefund = allBookings.some(b => 
-      b.refunds.some(r => ['PENDING', 'PENDING_ADMIN', 'PROCESSING'].includes(r.refundStatus))
+    const hasActiveRefund = allBookings.some((b) =>
+      b.refunds.some((r) =>
+        ["PENDING", "PENDING_ADMIN", "PROCESSING"].includes(r.refundStatus),
+      ),
     );
 
     if (hasActiveRefund) {
-      return NextResponse.json({ 
-        error: 'One or more bookings have active refunds. Cannot bulk release.' 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "One or more bookings have active refunds. Cannot bulk release.",
+        },
+        { status: 400 },
+      );
     }
 
     // Check for existing pending payouts
-    const hasPendingPayout = allBookings.some(b => 
-      b.payouts.some(p => p.type === 'TICKET_SALES' && p.status === 'PENDING')
+    const hasPendingPayout = allBookings.some((b) =>
+      b.payouts.some(
+        (p) => p.type === "TICKET_SALES" && p.status === "PENDING",
+      ),
     );
 
     if (hasPendingPayout) {
-      return NextResponse.json({ 
-        error: 'One or more bookings already have pending payouts. Cannot bulk release.' 
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "One or more bookings already have pending payouts. Cannot bulk release.",
+        },
+        { status: 400 },
+      );
     }
 
     // Calculate totals for bulk payout
@@ -238,14 +277,13 @@ export async function POST(request: Request) {
     let totalCommission = 0;
     let totalPayout = 0;
 
-    allBookings.forEach(b => {
+    allBookings.forEach((b) => {
       const amount = Number(b.totalAmount);
       totalAmount += amount;
       totalCommission += amount * commissionRate;
-      totalPayout += amount - (amount * commissionRate);
+      totalPayout += amount - amount * commissionRate;
     });
 
-    // ✅ Create a BULK payout record FIRST
     // Find or create vendor profile for organizer
     let organizerVendorProfile = await prisma.vendorProfile.findFirst({
       where: { userId: organizerId },
@@ -256,27 +294,26 @@ export async function POST(request: Request) {
         data: {
           userId: organizerId,
           businessName: `${organizerName}'s Events`,
-          serviceType: 'Event Organizer',
-          location: 'Nepal',
-          description: 'Auto-created for ticket payouts',
+          serviceType: "Event Organizer",
+          location: "Nepal",
+          description: "Auto-created for ticket payouts",
         },
       });
     }
 
-    // ✅ Create the bulk payout record
+    // Create the bulk payout record (parent)
     const bulkPayout = await prisma.payout.create({
       data: {
         vendorId: organizerVendorProfile.id,
         amount: totalAmount,
         platformCommission: totalCommission,
         vendorPayout: totalPayout,
-        type: 'TICKET_SALES_BULK',
-        status: 'PENDING',
+        type: "TICKET_SALES_BULK",
+        status: "PENDING",
         adminId: session.user.id,
         processedAt: null,
         notes: `[BULK PAYOUT] ${allBookings.length} tickets for "${eventTitle}". Released by ${session.user.email}. Total: NPR ${totalAmount}. Platform commission: ${totalCommission}. Organizer receives: ${totalPayout}.`,
         transactionId: `bulk_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-        // ✅ Store event info for reference
       },
     });
 
@@ -290,9 +327,9 @@ export async function POST(request: Request) {
         const result = await releaseSingleTicketFunds(
           booking.id,
           session.user.id,
-          session.user.email || 'admin',
+          session.user.email || "admin",
           eventTitle,
-          bulkPayout.id // ✅ Pass bulk payout ID to link
+          bulkPayout.id,
         );
         results.push(result);
         successCount++;
@@ -300,7 +337,7 @@ export async function POST(request: Request) {
         console.error(`Error releasing booking ${booking.id}:`, error);
         errors.push({
           bookingId: booking.id,
-          error: error.message || 'Unknown error occurred'
+          error: error.message || "Unknown error occurred",
         });
       }
     }
@@ -313,7 +350,6 @@ export async function POST(request: Request) {
       totalErrors: errors.length,
       results,
       errors,
-      // ✅ Include bulk payout info
       bulkPayout: {
         id: bulkPayout.id,
         totalAmount: totalAmount,
@@ -329,14 +365,16 @@ export async function POST(request: Request) {
         totalNetPayout: totalPayout,
         totalBookings: results.length,
       },
-      message: `Bulk release completed: ${successCount} successful, ${errors.length} failed for event "${eventTitle}".`
+      message: `Bulk release completed: ${successCount} successful, ${errors.length} failed for event "${eventTitle}".`,
     });
-
   } catch (error) {
-    console.error('Error in bulk release:', error);
-    return NextResponse.json({ 
-      error: 'Bulk release failed',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+    console.error("Error in bulk release:", error);
+    return NextResponse.json(
+      {
+        error: "Bulk release failed",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    );
   }
 }

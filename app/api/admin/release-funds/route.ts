@@ -1,3 +1,5 @@
+// app/api/admin/release-funds/route.ts
+
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -33,9 +35,7 @@ export async function POST(request: Request) {
             organizer: true,
           },
         },
-        user: true,
-        tier: true,
-        paymentTransactions: true,
+        // ✅ Removed unused includes: user, tier, paymentTransactions
         refunds: true,
         payouts: true,
       },
@@ -273,7 +273,7 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Calculate amounts
+    // ✅ Calculate amounts - commissionRate defined here for vendor section
     const commissionRate = await getPlatformCommissionRate();
     const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     const platformCommission = numericAmount * commissionRate;

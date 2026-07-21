@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useTheme } from "@/components/ThemeProvider";
+import ThemeWrapper from "@/components/ThemeWrapper";
 import { 
   ArrowLeftIcon,
   CalendarIcon,
@@ -56,7 +57,7 @@ const safeNumber = (value: any): number => {
   return 0;
 };
 
-export default function EventBookingsPage({ params }: { params: Promise<{ id: string }> }) {
+function EventBookingsContent({ params }: { params: Promise<{ id: string }> }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
@@ -341,5 +342,13 @@ export default function EventBookingsPage({ params }: { params: Promise<{ id: st
         </div>
       </main>
     </div>
+  );
+}
+
+export default function EventBookingsPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <ThemeWrapper>
+      <EventBookingsContent params={params} />
+    </ThemeWrapper>
   );
 }

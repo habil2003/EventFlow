@@ -14,7 +14,7 @@ import {
   ShieldCheckIcon,
   UserIcon,
   CalendarIcon,
-  BuildingOfficeIcon,
+  PhotoIcon,
 } from "@heroicons/react/24/outline";
 
 interface PayoutDetail {
@@ -31,6 +31,7 @@ interface PayoutDetail {
   khaltiPayoutId: string;
   isBulk: boolean;
   ticketCount: number;
+  bulkPayoutId?: string | null;
   childPayouts: {
     id: string;
     amount: number;
@@ -108,6 +109,20 @@ export default function AdminPayoutDetailPage() {
     return `NPR ${amount.toLocaleString()}`;
   };
 
+  // ✅ Helper function to extract proof image from notes
+  const extractProofImage = (notes: string): string | null => {
+    if (!notes) return null;
+    const match = notes.match(/Proof:\s*(https?:\/\/[^\s]+)/);
+    return match ? match[1] : null;
+  };
+
+  // ✅ Helper function to extract transfer method from notes
+  const extractTransferMethod = (notes: string): string | null => {
+    if (!notes) return null;
+    const match = notes.match(/Manual\s+(\w+)\s+transfer/);
+    return match ? match[1] : null;
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "COMPLETED":
@@ -177,6 +192,11 @@ export default function AdminPayoutDetailPage() {
   const isPending = payout.status === 'PENDING';
   const isProcessing = payout.status === 'PROCESSING';
   const isBulk = payout.isBulk || payout.type === 'TICKET_SALES_BULK';
+  const isChildPayout = !isBulk && payout.bulkPayoutId;
+
+  // ✅ Extract proof image and transfer method from notes
+  const proofImage = extractProofImage(payout.notes);
+  const transferMethod = extractTransferMethod(payout.notes);
 
   // Determine recipient info
   const recipientName = payout.vendor?.businessName || payout.ticketBooking?.event?.title || 'Unknown';
@@ -215,6 +235,11 @@ export default function AdminPayoutDetailPage() {
               <div>
                 <h1 className="text-xl font-bold text-white">
                   {isBulk ? `📦 Bulk Payout #${payout.id.slice(0, 8)}` : `Payout #${payout.id.slice(0, 8)}`}
+                  {isChildPayout && (
+                    <span className="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded-full">
+                      Child Payout
+                    </span>
+                  )}
                 </h1>
                 <p className="text-white/80 text-sm mt-1">
                   Created: {formatDate(payout.createdAt)}
@@ -234,7 +259,27 @@ export default function AdminPayoutDetailPage() {
 
           {/* Body */}
           <div className="p-6 space-y-6">
-            {/* ✅ Bulk Summary Banner */}
+            {/* Link to parent bulk payout (for child payouts) */}
+            {isChildPayout && payout.bulkPayoutId && (
+              <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <ShieldCheckIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                      This is part of a Bulk Payout
+                    </p>
+                    <Link
+                      href={`/admin/payouts/${payout.bulkPayoutId}`}
+                      className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                    >
+                      View Bulk Payout →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bulk Summary Banner */}
             {isBulk && (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <div className="flex items-start gap-3">
@@ -300,7 +345,7 @@ export default function AdminPayoutDetailPage() {
               </div>
             </div>
 
-            {/* ✅ Individual Ticket Breakdown (for Bulk) */}
+            {/* Individual Ticket Breakdown (for Bulk) */}
             {isBulk && payout.childPayouts && payout.childPayouts.length > 0 && (
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
@@ -365,21 +410,54 @@ export default function AdminPayoutDetailPage() {
               </div>
             )}
 
-            {/* Verification Info (if completed via escrow) */}
+            {/* ✅ Enhanced Verification Info with Proof Image */}
             {isCompleted && payout.khaltiPayoutId && (
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <ShieldCheckIcon className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                  <div>
+                  <div className="w-full">
                     <p className="text-sm font-medium text-green-700 dark:text-green-300">
                       ✅ Verified via Escrow
                     </p>
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      <strong>Transaction Reference:</strong> {payout.khaltiPayoutId}
-                    </p>
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      <strong>Verified At:</strong> {formatDate(payout.processedAt)}
-                    </p>
+                    <div className="mt-2 space-y-1 text-xs text-green-600 dark:text-green-400">
+                      <p><strong>Transaction Reference:</strong> {payout.khaltiPayoutId}</p>
+                      <p><strong>Verified At:</strong> {formatDate(payout.processedAt)}</p>
+                      {transferMethod && (
+                        <p><strong>Transfer Method:</strong> {transferMethod}</p>
+                      )}
+                    </div>
+                    {/* ✅ Show Proof Image */}
+                    {proofImage && (
+                      <div className="mt-3">
+                        <p className="text-xs font-medium text-green-700 dark:text-green-300 mb-2">
+                          <PhotoIcon className="h-4 w-4 inline mr-1" />
+                          Proof of Transfer:
+                        </p>
+                        <a 
+                          href={proofImage} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <img 
+                            src={proofImage} 
+                            alt="Transfer Proof" 
+                            className="max-w-full max-h-48 rounded-lg border border-green-200 dark:border-green-800 hover:opacity-80 transition-opacity"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                const fallback = document.createElement('p');
+                                fallback.className = 'text-xs text-green-600 dark:text-green-400';
+                                fallback.textContent = '🔗 Proof image not available. Click to view URL.';
+                                parent.appendChild(fallback);
+                              }
+                            }}
+                          />
+                        </a>
+                        <p className="text-xs text-green-500 mt-1">Click image to view full size</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

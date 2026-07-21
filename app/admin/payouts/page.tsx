@@ -37,6 +37,16 @@ interface Payout {
   adminName: string;
   transactionId: string;
   khaltiPayoutId: string;
+  // ✅ Added for bulk payouts
+  isBulk?: boolean;
+  ticketCount?: number;
+  childPayouts?: {
+    id: string;
+    amount: number;
+    vendorPayout: number;
+    customerName: string;
+    ticketNumber: string;
+  }[];
 }
 
 interface Summary {
@@ -181,9 +191,66 @@ export default function AdminPayoutsPage() {
         return { text: "Remaining", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" };
       case "TICKET_SALES":
         return { text: "Ticket Sales", color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" };
+      case "TICKET_SALES_BULK":
+        return { text: "Bulk Ticket Sales", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" };
       default:
         return { text: type, color: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300" };
     }
+  };
+
+  // ✅ Export CSV function
+  const exportCSV = () => {
+    if (payouts.length === 0) {
+      alert('No payouts to export');
+      return;
+    }
+
+    // Define CSV headers
+    const headers = [
+      'Date',
+      'Recipient',
+      'Event',
+      'Type',
+      'Amount (NPR)',
+      'Commission (NPR)',
+      'Net Payout (NPR)',
+      'Status',
+      'Transaction ID',
+      'Reference ID',
+      'Notes'
+    ];
+
+    // Build CSV rows
+    const rows = payouts.map(p => [
+      formatDate(p.processedAt || p.createdAt),
+      p.recipientName,
+      p.eventTitle,
+      p.isBulk ? `Bulk (${p.ticketCount} tickets)` : p.type,
+      p.amount,
+      p.platformCommission,
+      p.vendorPayout,
+      p.status,
+      p.transactionId || '',
+      p.khaltiPayoutId || '',
+      (p.notes || '').replace(/,/g, ';').replace(/\n/g, ' ')
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `payouts_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (!mounted || status === "loading" || loading) {
@@ -221,7 +288,9 @@ export default function AdminPayoutsPage() {
                 <ArrowPathIcon className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 <span className="text-sm text-gray-600 dark:text-gray-400">Refresh</span>
               </button>
+              {/* ✅ Export CSV button with functionality */}
               <button
+                onClick={exportCSV}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
               >
                 <DocumentTextIcon className="h-4 w-4" />
@@ -321,6 +390,7 @@ export default function AdminPayoutsPage() {
               <option value="DEPOSIT">Deposit</option>
               <option value="REMAINING">Remaining</option>
               <option value="TICKET_SALES">Ticket Sales</option>
+              <option value="TICKET_SALES_BULK">Bulk Ticket Sales</option>
             </select>
 
             <button
@@ -384,6 +454,11 @@ export default function AdminPayoutsPage() {
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${TypeBadge.color}`}>
                             {TypeBadge.text}
+                            {payout.isBulk && payout.ticketCount && (
+                              <span className="ml-1 bg-white/30 px-1 rounded-full text-[10px]">
+                                {payout.ticketCount}
+                              </span>
+                            )}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -409,17 +484,6 @@ export default function AdminPayoutsPage() {
                             <EyeIcon className="h-4 w-4 inline mr-1" />
                             View
                           </Link>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {payout.isBulk && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                              📦 {payout.ticketCount} tickets
-                            </span>
-                          )}
-                          {!payout.isBulk && payout.type === 'TICKET_SALES' && (
-                            <span className="text-xs text-gray-400">Single ticket</span>
-                          )}
                         </td>
                       </tr>
                     );
@@ -465,10 +529,11 @@ export default function AdminPayoutsPage() {
             <div>
               <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Payout Summary</p>
               <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
-                This page shows all payouts processed through the system.
+                This page shows all payouts processed through the system. 
                 <strong> Completed</strong> payouts have been verified with proof documents.
                 <strong> Pending</strong> payouts are waiting for admin approval.
                 <strong> Processing</strong> payouts are being manually processed.
+                <strong> Bulk Ticket Sales</strong> shows multiple tickets released at once.
               </p>
             </div>
           </div>

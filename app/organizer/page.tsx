@@ -5,15 +5,12 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-// Remove useTheme import - handle theme manually
 import { 
   CalendarIcon, 
   TicketIcon, 
   QrCodeIcon, 
   ChartBarIcon,
   SparklesIcon,
-  MoonIcon,
-  SunIcon,
   ArrowRightIcon,
   CheckCircleIcon,
   CurrencyRupeeIcon
@@ -23,26 +20,16 @@ export default function OrganizerDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   
-  // Manual theme management
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  // Manual theme management for dark/light classes (no toggle button needed)
   const [mounted, setMounted] = useState(false);
 
-  // Handle theme
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
     document.documentElement.classList.toggle("dark", initialTheme === "dark");
   }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -83,12 +70,12 @@ export default function OrganizerDashboard() {
   }
 
   const navItems = [
-  { name: "Create Event", href: "/organizer/create", icon: CalendarIcon, color: "from-blue-500 to-blue-600", description: "Set up a new ticketed event" },
-  { name: "My Events", href: "/organizer/events", icon: TicketIcon, color: "from-green-500 to-green-600", description: "Manage your events" },
-  { name: "Check-in", href: "/organizer/checkin", icon: QrCodeIcon, color: "from-indigo-500 to-indigo-600", description: "Scan QR codes at venue" },
-  { name: "Sales", href: "/organizer/sales", icon: ChartBarIcon, color: "from-purple-500 to-purple-600", description: "View revenue analytics" },
-  { name: "Payouts", href: "/organizer/payouts", icon: CurrencyRupeeIcon, color: "from-amber-500 to-amber-600", description: "View payment history" },  // ✅ ADD THIS LINE
-];
+    { name: "Create Event", href: "/organizer/create", icon: CalendarIcon, color: "from-blue-500 to-blue-600", description: "Set up a new ticketed event" },
+    { name: "My Events", href: "/organizer/events", icon: TicketIcon, color: "from-green-500 to-green-600", description: "Manage your events" },
+    { name: "Check-in", href: "/organizer/checkin", icon: QrCodeIcon, color: "from-indigo-500 to-indigo-600", description: "Scan QR codes at venue" },
+    { name: "Sales", href: "/organizer/sales", icon: ChartBarIcon, color: "from-purple-500 to-purple-600", description: "View revenue analytics" },
+    { name: "Payouts", href: "/organizer/payouts", icon: CurrencyRupeeIcon, color: "from-amber-500 to-amber-600", description: "View payment history" },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
@@ -165,7 +152,7 @@ export default function OrganizerDashboard() {
           className="mb-8"
         >
           <h2 className="mb-4 text-lg font-bold text-gray-800 dark:text-gray-200">Quick Actions</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {navItems.map((item, idx) => (
               <motion.div
                 key={idx}

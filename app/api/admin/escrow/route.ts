@@ -5,6 +5,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// ✅ Helper function to get platform commission rate
+async function getPlatformCommissionRate(): Promise<number> {
+  return Number(process.env.PLATFORM_COMMISSION || '0.1');
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -42,7 +47,7 @@ export async function GET() {
       },
     });
 
-    // ✅ FIX: Get ticket bookings - include PROCESSING_PAYOUT even if escrowReleased is true
+    // ✅ Get ticket bookings - include PROCESSING_PAYOUT even if escrowReleased is true
     const ticketBookings = await prisma.ticketBooking.findMany({
       where: {
         paymentStatus: {
@@ -79,7 +84,12 @@ export async function GET() {
         tier: true,
         paymentTransactions: true,
         refunds: true,
-        payouts: true,
+        payouts: {
+          include: {
+            parentPayout: true,
+            childPayouts: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -186,6 +196,8 @@ export async function GET() {
                         booking.paymentStatus === 'HELD_IN_ESCROW' && 
                         !hasActiveRefund;
 
+      const hasParentPayout = booking.payouts.some(p => p.parentPayout !== null);
+
       return {
         id: booking.id,
         type: 'TICKET' as const,
@@ -207,11 +219,14 @@ export async function GET() {
         escrowReleased: booking.escrowReleased,
         hasActiveRefund: hasActiveRefund,
         hasPendingPayout: hasPendingPayout,
+        hasParentPayout: hasParentPayout,
         pendingPayouts: pendingPayouts.map(p => ({
           id: p.id,
           amount: p.amount,
           type: p.type,
           vendorPayout: p.vendorPayout,
+          isBulkChild: !!p.parentPayout,
+          parentPayoutId: p.parentPayout?.id || null,
         })),
         createdAt: booking.createdAt,
         paymentTransactionId: booking.paymentTransactions[0]?.id,
@@ -223,7 +238,7 @@ export async function GET() {
       };
     });
 
-    // Get event groups for ticket bookings with more details
+    // ✅ FIXED: Event groups - separate display totals from bulk release totals
     const ticketBookingsByEvent = formattedTicketBookings.reduce((groups, booking) => {
       const key = booking.eventId || booking.eventTitle;
       if (!groups[key]) {
@@ -235,25 +250,47 @@ export async function GET() {
           organizerName: booking.organizerName,
           organizerId: booking.organizerId,
           bookings: [],
+          // ✅ Display counts and totals - include ALL tickets
+          displayCount: 0,
           totalAmount: 0,
           totalCommission: 0,
           organizerPayout: 0,
-          count: 0,
+          // ✅ Bulk release counts and totals - only HELD_IN_ESCROW
+          bulkReleaseCount: 0,
+          bulkTotalAmount: 0,
+          bulkTotalCommission: 0,
+          bulkOrganizerPayout: 0,
+          processingCount: 0,
           bookingIds: [],
           canBulkReleaseAll: true,
         };
       }
+      
+      // ✅ Always add booking and increment display count
       groups[key].bookings.push(booking);
+      groups[key].displayCount += 1;
+      
+      // ✅ Include ALL tickets in display totals (for summary bar)
       groups[key].totalAmount += booking.totalAmount || 0;
       groups[key].totalCommission += booking.platformCommission || 0;
       groups[key].organizerPayout += booking.organizerPayout || 0;
-      groups[key].count += 1;
-      groups[key].bookingIds.push(booking.id);
       
-      // Check if any booking can't be released (for bulk release availability)
-      if (!booking.canRelease && booking.paymentStatus !== 'PROCESSING_PAYOUT') {
-        groups[key].canBulkReleaseAll = false;
+      // ✅ Track status counts
+      if (booking.paymentStatus === 'HELD_IN_ESCROW' && booking.canRelease) {
+        groups[key].bulkReleaseCount += 1;
+        groups[key].bookingIds.push(booking.id);
+        // ✅ Only include in bulk totals if in HELD_IN_ESCROW
+        groups[key].bulkTotalAmount += booking.totalAmount || 0;
+        groups[key].bulkTotalCommission += booking.platformCommission || 0;
+        groups[key].bulkOrganizerPayout += booking.organizerPayout || 0;
       }
+      
+      if (booking.paymentStatus === 'PROCESSING_PAYOUT') {
+        groups[key].processingCount += 1;
+      }
+      
+      // ✅ canBulkReleaseAll only if there are HELD_IN_ESCROW tickets
+      groups[key].canBulkReleaseAll = groups[key].bulkReleaseCount > 0;
       
       return groups;
     }, {} as Record<string, any>);
@@ -289,7 +326,7 @@ export async function GET() {
         processingPayouts: processingPayouts.length,
         totalItems: formattedVendorBookings.length + formattedTicketBookings.length,
       },
-      bulkReleaseAvailable: eventGroups.some((group: any) => group.canBulkReleaseAll && group.count > 1),
+      bulkReleaseAvailable: eventGroups.some((group: any) => group.canBulkReleaseAll && group.bulkReleaseCount > 1),
     });
   } catch (error) {
     console.error('Error fetching escrow data:', error);

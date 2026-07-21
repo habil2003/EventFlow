@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useTheme } from "@/components/ThemeProvider";
+import ThemeWrapper from "@/components/ThemeWrapper";
 import { 
   BuildingOfficeIcon,
   BriefcaseIcon,
@@ -606,18 +607,20 @@ function ApprovalsContent() {
   );
 }
 
-// ✅ Main export with Suspense boundary
+// ✅ Main export with ThemeWrapper and Suspense boundary
 export default function ApprovalsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
-          <p className="mt-2 text-sm text-gray-500">Loading approvals...</p>
+    <ThemeWrapper>
+      <Suspense fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+            <p className="mt-2 text-sm text-gray-500">Loading approvals...</p>
+          </div>
         </div>
-      </div>
-    }>
-      <ApprovalsContent />
-    </Suspense>
+      }>
+        <ApprovalsContent />
+      </Suspense>
+    </ThemeWrapper>
   );
 }

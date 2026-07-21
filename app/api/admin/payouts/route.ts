@@ -19,9 +19,8 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    // Build where clause - exclude individual payouts that are part of a bulk
+    // Build where clause - only show parent payouts (bulk payouts and individual non-bulk)
     const where: any = {
-      // ✅ Exclude individual payouts that are linked to a bulk payout
       bulkPayoutId: null,
     };
 
@@ -71,13 +70,18 @@ export async function GET(request: Request) {
           admin: {
             select: { name: true, email: true },
           },
-          // ✅ Include child payouts for bulk
           childPayouts: {
             include: {
               ticketBooking: {
                 include: {
                   user: true,
                   event: true,
+                },
+              },
+              vendorBooking: {
+                include: {
+                  user: true,
+                  userSocialEvent: true,
                 },
               },
             },
@@ -121,22 +125,41 @@ export async function GET(request: Request) {
         recipientType = 'Organizer';
       }
 
+      // ✅ Fix: Get event title from ticketBooking or child payouts
       let eventTitle = 'N/A';
-      if (p.vendorBooking?.userSocialEvent) {
-        eventTitle = p.vendorBooking.userSocialEvent.title;
-      } else if (p.ticketBooking?.event) {
+      if (p.ticketBooking?.event?.title) {
         eventTitle = p.ticketBooking.event.title;
+      } else if (p.vendorBooking?.userSocialEvent?.title) {
+        eventTitle = p.vendorBooking.userSocialEvent.title;
+      } else if (p.childPayouts && p.childPayouts.length > 0) {
+        // For bulk payouts, get event title from first child
+        const firstChild = p.childPayouts[0];
+        if (firstChild?.ticketBooking?.event?.title) {
+          eventTitle = firstChild.ticketBooking.event.title;
+        }
       }
 
-      // ✅ Check if this is a bulk payout
+      // ✅ Check if this is a bulk payout and count child payouts
       const isBulk = p.type === 'TICKET_SALES_BULK';
-      const ticketCount = p.childPayouts?.length || 0;
+      const childCount = p.childPayouts?.length || 0;
+
+      // ✅ Recalculate from child payouts for bulk payouts
+      let totalAmount = Number(p.amount);
+      let totalCommission = Number(p.platformCommission);
+      let totalVendorPayout = Number(p.vendorPayout);
+
+      if (isBulk && p.childPayouts && p.childPayouts.length > 0) {
+        // Recalculate from child payouts to ensure accuracy
+        totalAmount = p.childPayouts.reduce((sum, child) => sum + Number(child.amount), 0);
+        totalCommission = p.childPayouts.reduce((sum, child) => sum + Number(child.platformCommission), 0);
+        totalVendorPayout = p.childPayouts.reduce((sum, child) => sum + Number(child.vendorPayout), 0);
+      }
 
       return {
         id: p.id,
-        amount: Number(p.amount),
-        platformCommission: Number(p.platformCommission),
-        vendorPayout: Number(p.vendorPayout),
+        amount: totalAmount,
+        platformCommission: totalCommission,
+        vendorPayout: totalVendorPayout,
         type: p.type,
         status: p.status,
         createdAt: p.createdAt,
@@ -144,20 +167,20 @@ export async function GET(request: Request) {
         notes: p.notes,
         recipientName,
         recipientType,
-        eventTitle,
+        eventTitle, // ✅ Fixed - now shows event name for bulk payouts
         adminName: p.admin?.name || 'System',
         transactionId: p.transactionId,
         khaltiPayoutId: p.khaltiPayoutId,
-        vendorBookingId: p.bookingId,
-        ticketBookingId: p.ticketBookingId,
         // ✅ Bulk-specific fields
-        isBulk,
-        ticketCount,
+        isBulk: isBulk,
+        ticketCount: childCount, // ✅ Fixed - now shows ticket count
         childPayouts: p.childPayouts?.map(child => ({
           id: child.id,
           amount: Number(child.amount),
           vendorPayout: Number(child.vendorPayout),
-          customerName: child.ticketBooking?.user?.name || 'Unknown',
+          customerName: child.ticketBooking?.user?.name || 
+                        child.vendorBooking?.user?.name || 
+                        'Unknown',
           ticketNumber: child.ticketBooking?.ticketNumber || 'N/A',
         })) || [],
       };

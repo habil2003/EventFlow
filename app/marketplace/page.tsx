@@ -11,11 +11,8 @@ import {
   StarIcon,
   FunnelIcon,
   BuildingOfficeIcon,
-  MoonIcon,
-  SunIcon,
   SparklesIcon,
   CurrencyRupeeIcon,
-  UserGroupIcon
 } from "@heroicons/react/24/outline";
 
 interface Package {
@@ -39,7 +36,34 @@ interface Vendor {
   pricingType?: string;
 }
 
-// ✅ Component that uses useSearchParams()
+// ✅ Normalize location for display
+const normalizeLocation = (location: string): string => {
+  if (!location) return '';
+  return location
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+// ✅ Extract city name from full address
+const extractCity = (location: string): string => {
+  if (!location) return '';
+  // Handle "Pokhara, Nepal" → "Pokhara"
+  const parts = location.split(',').map(s => s.trim());
+  return parts[0] || location;
+};
+
+// ✅ Get unique, normalized cities
+const getUniqueCities = (vendors: Vendor[]): string[] => {
+  const cities = vendors
+    .map(v => extractCity(normalizeLocation(v.location)))
+    .filter(Boolean);
+  return [...new Set(cities)].sort();
+};
+
 function MarketplaceContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -59,28 +83,14 @@ function MarketplaceContent() {
   const [selectedService, setSelectedService] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
 
+  // ✅ Service types from vendors
   const serviceTypes = [
     "all",
-    "venue",
-    "catering",
-    "photography",
-    "decoration",
-    "makeup",
-    "dj",
-    "transport",
-    "invitation",
-    "fashion",
-    "gifts"
+    ...new Set(vendors.map(v => v.serviceType).filter(Boolean))
   ];
 
-  const locations = [
-    "all",
-    "Kathmandu",
-    "Pokhara",
-    "Lalitpur",
-    "Bhaktapur",
-    "Chitwan"
-  ];
+  // ✅ Cities extracted from vendor locations
+  const cities = getUniqueCities(vendors);
 
   useEffect(() => {
     setMounted(true);
@@ -132,9 +142,12 @@ function MarketplaceContent() {
     let filtered = [...vendors];
 
     if (searchTerm) {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(vendor =>
-        vendor.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        vendor.description?.toLowerCase().includes(searchTerm.toLowerCase())
+        vendor.businessName.toLowerCase().includes(term) ||
+        vendor.description?.toLowerCase().includes(term) ||
+        vendor.serviceType.toLowerCase().includes(term) ||
+        vendor.location.toLowerCase().includes(term)
       );
     }
 
@@ -143,7 +156,10 @@ function MarketplaceContent() {
     }
 
     if (selectedLocation !== "all") {
-      filtered = filtered.filter(vendor => vendor.location === selectedLocation);
+      // ✅ Filter by city (extracted from full location)
+      filtered = filtered.filter(vendor => 
+        extractCity(vendor.location).toLowerCase() === selectedLocation.toLowerCase()
+      );
     }
 
     setFilteredVendors(filtered);
@@ -195,9 +211,7 @@ function MarketplaceContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-
         <motion.div
           initial="hidden"
           animate="visible"
@@ -221,12 +235,13 @@ function MarketplaceContent() {
           </p>
         </motion.div>
 
+        {/* Search Bar */}
         <div className="mb-8">
           <div className="relative max-w-xl mx-auto">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search vendors by name or service..."
+              placeholder="Search vendors by name, service, or location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -234,7 +249,9 @@ function MarketplaceContent() {
           </div>
         </div>
 
+        {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-8 justify-center">
+          {/* Service Type Filter */}
           <div className="flex items-center gap-2">
             <FunnelIcon className="h-4 w-4 text-gray-400" />
             <select
@@ -250,6 +267,7 @@ function MarketplaceContent() {
             </select>
           </div>
 
+          {/* ✅ Location Filter - Clean cities */}
           <div className="flex items-center gap-2">
             <MapPinIcon className="h-4 w-4 text-gray-400" />
             <select
@@ -257,14 +275,25 @@ function MarketplaceContent() {
               onChange={(e) => setSelectedLocation(e.target.value)}
               className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
             >
-              {locations.map(location => (
-                <option key={location} value={location}>
-                  {location === "all" ? "All Locations" : location}
+              <option value="all">All Locations</option>
+              {cities.map(city => (
+                <option key={city} value={city}>
+                  {city}
                 </option>
               ))}
             </select>
           </div>
+
+          {/* ✅ Show count of available vendors in each location */}
+          <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center">
+            <span>{vendors.length} vendors available</span>
+          </div>
         </div>
+
+        {/* Results Count */}
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
+          Showing {filteredVendors.length} of {vendors.length} vendors
+        </p>
 
         {filteredVendors.length === 0 ? (
           <div className="text-center py-12">
