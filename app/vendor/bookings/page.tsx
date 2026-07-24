@@ -166,6 +166,37 @@ export default function VendorBookingsPage() {
     }
   };
 
+  // ✅ NEW: Handle Mark as Complete
+  const handleMarkComplete = async (bookingId: string) => {
+    if (!confirm('Are you sure you want to mark this booking as complete? The customer will be notified to confirm.')) return;
+
+    setActionLoading(bookingId);
+    try {
+      const response = await fetch(`/api/vendor/bookings/${bookingId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'COMPLETED' }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setMessage({ text: '✅ Service marked as complete! Customer has been notified.', type: 'success' });
+        const refreshResponse = await fetch("/api/vendor/bookings");
+        const refreshedData = await refreshResponse.json();
+        setBookings(refreshedData);
+      } else {
+        setMessage({ text: data.error || 'Failed to mark as complete', type: 'error' });
+      }
+    } catch (error) {
+      console.error("Error marking complete:", error);
+      setMessage({ text: 'An error occurred', type: 'error' });
+    } finally {
+      setActionLoading(null);
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
   const getStatusBadge = (status: string, cancelledBy?: string) => {
     switch (status) {
       case 'ACCEPTED':
@@ -176,7 +207,7 @@ export default function VendorBookingsPage() {
         }
         return { text: 'Declined', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: XCircleIcon };
       case 'COMPLETED':
-        return { text: 'Completed', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircleIcon };
+        return { text: 'Completed ✅', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircleIcon };
       default:
         return { text: 'Pending', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', icon: ClockIcon };
     }
@@ -207,6 +238,11 @@ export default function VendorBookingsPage() {
   const canAcceptBooking = (booking: Booking) => {
     return booking.bookingStatus === 'PENDING' &&
       booking.vendorPaymentStatus === 'DEPOSIT_PAID';
+  };
+
+  const canMarkComplete = (booking: Booking) => {
+    return booking.bookingStatus === 'ACCEPTED' &&
+      booking.vendorPaymentStatus === 'FULLY_PAID';
   };
 
   // Filter bookings based on search and status
@@ -491,7 +527,7 @@ export default function VendorBookingsPage() {
           </div>
         )}
 
-        {/* Accepted Bookings Section */}
+        {/* Accepted Bookings Section - UPDATED with Mark as Complete */}
         {acceptedBookings.length > 0 && (
           <div className="mb-12">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -505,6 +541,7 @@ export default function VendorBookingsPage() {
                 const dateDisplay = formatEventDate(booking);
                 const isMultiDay = booking.startDate && booking.endDate && booking.startDate !== booking.endDate;
                 const isProcessingPayout = booking.vendorPaymentStatus === 'PROCESSING_PAYOUT';
+                const canMarkCompleteBooking = canMarkComplete(booking);
 
                 return (
                   <div key={booking.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-all">
@@ -553,6 +590,23 @@ export default function VendorBookingsPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* ✅ NEW: Mark as Complete Button */}
+                    {canMarkCompleteBooking && (
+                      <div className="mt-4">
+                        <button
+                          onClick={() => handleMarkComplete(booking.id)}
+                          disabled={actionLoading === booking.id}
+                          className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50"
+                        >
+                          <CheckCircleIcon className="h-4 w-4" />
+                          {actionLoading === booking.id ? 'Processing...' : 'Mark as Complete'}
+                        </button>
+                        <p className="text-xs text-gray-400 mt-1 text-center">
+                          Mark service as completed. Customer will be notified to confirm.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 );
               })}

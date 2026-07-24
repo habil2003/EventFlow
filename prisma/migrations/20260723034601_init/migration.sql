@@ -1,6 +1,3 @@
--- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "public";
-
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('ADMIN', 'ORGANIZER', 'VENDOR', 'USER');
 
@@ -21,6 +18,9 @@ CREATE TYPE "PaymentType" AS ENUM ('TICKET_PURCHASE', 'VENDOR_DEPOSIT', 'VENDOR_
 
 -- CreateEnum
 CREATE TYPE "VendorPaymentStatus" AS ENUM ('PENDING', 'DEPOSIT_PAID', 'FULLY_PAID', 'COMPLETED', 'REFUNDED', 'DISPUTED', 'PROCESSING_PAYOUT');
+
+-- CreateEnum
+CREATE TYPE "RefundStatus" AS ENUM ('PENDING_ADMIN', 'PROCESSED', 'FAILED', 'CANCELLED');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -283,7 +283,7 @@ CREATE TABLE "Refund" (
     "originalTransactionId" TEXT NOT NULL,
     "refundAmount" DECIMAL(10,2) NOT NULL,
     "refundReason" TEXT NOT NULL,
-    "refundStatus" TEXT NOT NULL DEFAULT 'PENDING',
+    "refundStatus" "RefundStatus" NOT NULL DEFAULT 'PENDING_ADMIN',
     "gatewayRefundId" TEXT,
     "gatewayResponse" JSONB,
     "ticketBookingId" TEXT,
@@ -313,6 +313,7 @@ CREATE TABLE "Payout" (
     "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "bulkPayoutId" TEXT,
 
     CONSTRAINT "Payout_pkey" PRIMARY KEY ("id")
 );
@@ -390,6 +391,9 @@ CREATE INDEX "Payout_vendorId_idx" ON "Payout"("vendorId");
 CREATE INDEX "Payout_status_idx" ON "Payout"("status");
 
 -- CreateIndex
+CREATE INDEX "Payout_bulkPayoutId_idx" ON "Payout"("bulkPayoutId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "VendorUnavailableDate_vendorId_date_key" ON "VendorUnavailableDate"("vendorId", "date");
 
 -- AddForeignKey
@@ -453,6 +457,9 @@ ALTER TABLE "BookingAddOn" ADD CONSTRAINT "BookingAddOn_addOnId_fkey" FOREIGN KE
 ALTER TABLE "Dispute" ADD CONSTRAINT "Dispute_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "VendorBooking"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Dispute" ADD CONSTRAINT "Dispute_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "PaymentTransaction" ADD CONSTRAINT "PaymentTransaction_ticketBookingId_fkey" FOREIGN KEY ("ticketBookingId") REFERENCES "TicketBooking"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -468,6 +475,9 @@ ALTER TABLE "Refund" ADD CONSTRAINT "Refund_vendorBookingId_fkey" FOREIGN KEY ("
 ALTER TABLE "Refund" ADD CONSTRAINT "Refund_paymentTransactionId_fkey" FOREIGN KEY ("paymentTransactionId") REFERENCES "PaymentTransaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Payout" ADD CONSTRAINT "Payout_bulkPayoutId_fkey" FOREIGN KEY ("bulkPayoutId") REFERENCES "Payout"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Payout" ADD CONSTRAINT "Payout_bookingId_fkey" FOREIGN KEY ("bookingId") REFERENCES "VendorBooking"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -481,4 +491,3 @@ ALTER TABLE "Payout" ADD CONSTRAINT "Payout_adminId_fkey" FOREIGN KEY ("adminId"
 
 -- AddForeignKey
 ALTER TABLE "VendorUnavailableDate" ADD CONSTRAINT "VendorUnavailableDate_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "VendorProfile"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

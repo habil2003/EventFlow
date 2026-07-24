@@ -37,6 +37,10 @@ interface BookingDetail {
   vendorPaymentStatus: string;
   paymentStatus: string;
   bookingStatus: string;
+  primaryStatus: string;
+  primaryStatusLabel: string;
+  payoutStatus: string;
+  payoutStatusColor: string;
   eventDate: string;
   startDate?: string;
   endDate?: string;
@@ -56,6 +60,16 @@ interface BookingDetail {
   refundStatus?: string | null;
   refundAmount?: number | null;
   refundPercentage?: number | null;
+  depositReleased: boolean;
+  remainingReleased: boolean;
+  fullyReleased: boolean;
+  hasPendingPayout: boolean;
+  depositReleasedAt?: string | null;
+  remainingReleasedAt?: string | null;
+  // ✅ ADD THESE FIELDS
+  customerConfirmed?: boolean;
+  vendorMarkedComplete?: boolean;
+  canConfirm?: boolean;
 }
 
 // ✅ Component that uses useSearchParams()
@@ -70,6 +84,7 @@ function BookingDetailContent() {
   const [loading, setLoading] = useState(true);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const returnTo = searchParams.get("returnTo") || "upcoming";
   const eventId = searchParams.get("eventId");
@@ -119,55 +134,125 @@ function BookingDetailContent() {
     fetchBooking();
   }, [bookingId]);
 
+  // ✅ NEW: Handle customer confirmation
+  const handleConfirmCompletion = async () => {
+    if (!confirm('Are you sure the service was completed to your satisfaction? This will release the funds to the vendor.')) return;
+
+    setConfirming(true);
+    try {
+      const response = await fetch(`/api/user/vendor-bookings/${booking!.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'CONFIRM_COMPLETION' }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('✅ Thank you! Your confirmation has been recorded. The funds will be released to the vendor.');
+        window.location.reload();
+      } else {
+        alert(data.error || 'Failed to confirm completion');
+      }
+    } catch (error) {
+      console.error('Error confirming completion:', error);
+      alert('An error occurred. Please try again.');
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const getBookingStatusBadge = (status: string) => {
     switch (status) {
       case "ACCEPTED":
-        return { text: "Confirmed", icon: CheckCircleIcon, color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" };
+        return {
+          text: "Confirmed",
+          icon: CheckCircleIcon,
+          color:
+            "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+        };
       case "PENDING":
-        return { text: "Pending", icon: PendingIcon, color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" };
+        return {
+          text: "Pending",
+          icon: PendingIcon,
+          color:
+            "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
+        };
       case "DECLINED":
-        return { text: "Declined", icon: XCircleIcon, color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" };
+        return {
+          text: "Declined",
+          icon: XCircleIcon,
+          color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400",
+        };
       case "COMPLETED":
-        return { text: "Completed", icon: CheckCircleIcon, color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" };
+        return {
+          text: "Completed",
+          icon: CheckCircleIcon,
+          color:
+            "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+        };
       default:
-        return { text: status, icon: PendingIcon, color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400" };
+        return {
+          text: status,
+          icon: PendingIcon,
+          color:
+            "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+        };
     }
   };
 
-  const getVendorPaymentStatusBadge = (status: string) => {
+  const getPaymentStatusBadge = (status: string | undefined) => {
     switch (status) {
       case "DEPOSIT_PAID":
-        return { text: "Deposit Paid", color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" };
+        return {
+          text: "Deposit Paid",
+          color:
+            "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+        };
       case "FULLY_PAID":
-        return { text: "Fully Paid", color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" };
+        return {
+          text: "Fully Paid",
+          color:
+            "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+        };
       case "PENDING":
-        return { text: "Payment Pending", color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" };
+        return {
+          text: "Payment Pending",
+          color:
+            "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
+        };
       default:
-        return { text: status || "Pending", color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400" };
+        return {
+          text: status || "Pending",
+          color:
+            "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+        };
     }
   };
 
-  const getEscrowStatusBadge = (status: string) => {
-    switch (status) {
-      case "HELD_IN_ESCROW":
-        return { text: "Funds in Escrow", color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" };
-      case "COMPLETED":
-        return { text: "Released to Vendor", color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" };
-      case "PENDING":
-        return { text: "Pending", color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" };
-      case "REFUNDED":
-        return { text: "Refunded", color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400" };
-      default:
-        return { text: status, color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400" };
-    }
+  const getPayoutStatusBadge = (status: string, color: string) => {
+    const colorMap: Record<string, string> = {
+      green:
+        "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+      yellow:
+        "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
+      blue: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+      gray: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+    };
+    return {
+      text: status,
+      color: colorMap[color] || colorMap.gray,
+    };
   };
 
   const isEventCompleted = () => {
     if (!booking) return false;
-    const eventDate = booking.endDate
-      ? new Date(booking.endDate)
-      : new Date(booking.eventDate);
-    return eventDate < new Date();
+    const isMultiDay =
+      booking.startDate &&
+      booking.endDate &&
+      booking.startDate !== booking.endDate;
+    const dateToCheck = isMultiDay ? booking.endDate! : booking.eventDate;
+    return new Date(dateToCheck) < new Date();
   };
 
   const canPayRemaining = () => {
@@ -190,7 +275,8 @@ function BookingDetailContent() {
     return (
       booking?.bookingStatus === "ACCEPTED" &&
       booking?.vendorPaymentStatus === "DEPOSIT_PAID" &&
-      !!booking?.depositPaidAt
+      !!booking?.depositPaidAt &&
+      !isEventCompleted()
     );
   };
 
@@ -201,15 +287,24 @@ function BookingDetailContent() {
     );
   };
 
+  // ✅ Check if customer can confirm
+  const canConfirm = () => {
+    return (
+      booking?.bookingStatus === "COMPLETED" &&
+      booking?.vendorMarkedComplete === true &&
+      booking?.customerConfirmed === false
+    );
+  };
+
   const handleCancelWithRefund = async () => {
     const reason = prompt(
-      "Reason for cancellation (optional):\n\nRefund policy:\n≥7 days before event: 100% refund\n3–6 days before event: 50% refund\n<3 days before event: No refund"
+      "Reason for cancellation (optional):\n\nRefund policy:\n≥7 days before event: 100% refund\n3–6 days before event: 50% refund\n<3 days before event: No refund",
     );
     if (reason === null) return;
 
     if (
       !confirm(
-        "Are you sure you want to cancel this booking? This cannot be undone."
+        "Are you sure you want to cancel this booking? This cannot be undone.",
       )
     )
       return;
@@ -242,17 +337,16 @@ function BookingDetailContent() {
   const handleCancelWithoutRefund = async () => {
     if (
       !confirm(
-        "Are you sure you want to cancel this booking? This action cannot be undone."
+        "Are you sure you want to cancel this booking? This action cannot be undone.",
       )
     )
       return;
 
     setCancelling(true);
     try {
-      const response = await fetch(
-        `/api/user/vendor-bookings/${booking!.id}`,
-        { method: "DELETE" }
-      );
+      const response = await fetch(`/api/user/vendor-bookings/${booking!.id}`, {
+        method: "DELETE",
+      });
       const data = await response.json();
       if (response.ok) {
         alert("Booking cancelled successfully");
@@ -285,7 +379,9 @@ function BookingDetailContent() {
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
-          <p className="mt-2 text-sm text-gray-500">Loading booking details...</p>
+          <p className="mt-2 text-sm text-gray-500">
+            Loading booking details...
+          </p>
         </div>
       </div>
     );
@@ -310,14 +406,14 @@ function BookingDetailContent() {
   }
 
   const bookingStatus = getBookingStatusBadge(booking.bookingStatus);
-  const vendorPaymentStatus = getVendorPaymentStatusBadge(
-    booking.vendorPaymentStatus
+  const paymentStatus = getPaymentStatusBadge(booking.vendorPaymentStatus);
+  const payoutStatus = getPayoutStatusBadge(
+    booking.payoutStatus,
+    booking.payoutStatusColor,
   );
-  const escrowStatus = getEscrowStatusBadge(booking.paymentStatus);
   const StatusIcon = bookingStatus.icon;
   const eventPassed = isEventCompleted();
-  const depositAmount =
-    booking.depositAmount || booking.totalAmount * 0.2 || 0;
+  const depositAmount = booking.depositAmount || booking.totalAmount * 0.2 || 0;
   const remainingAmount =
     booking.remainingAmount || booking.totalAmount * 0.8 || 0;
   const isMultiDay =
@@ -325,12 +421,12 @@ function BookingDetailContent() {
     booking.endDate &&
     booking.startDate !== booking.endDate;
   const multiDayDiscount = calculateMultiDayDiscountAmount();
+  const showConfirmButton = canConfirm();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="space-y-6">
-
           <Link
             href={backUrl}
             className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -355,21 +451,103 @@ function BookingDetailContent() {
                     <StatusIcon className="h-3 w-3 mr-1" />
                     {bookingStatus.text}
                   </span>
-                  <span
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${vendorPaymentStatus.color}`}
-                  >
-                    {vendorPaymentStatus.text}
-                  </span>
-                  <span
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${escrowStatus.color}`}
-                  >
-                    {escrowStatus.text}
-                  </span>
                 </div>
               </div>
             </div>
 
             <div className="p-6 space-y-6">
+              {/* ✅ NEW: Customer Confirmation Section */}
+              {showConfirmButton && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                        ✅ Vendor has marked this service as completed!
+                      </p>
+                      <p className="text-xs text-green-700 dark:text-green-400 mt-1">
+                        Please confirm that the service was delivered to your satisfaction.
+                        This will release the funds to the vendor.
+                      </p>
+                      <button
+                        onClick={handleConfirmCompletion}
+                        disabled={confirming}
+                        className="mt-3 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {confirming ? (
+                          <>
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircleIcon className="h-4 w-4" />
+                            ✅ Confirm Completion
+                          </>
+                        )}
+                      </button>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        ⚠️ Once confirmed, funds will be released to the vendor.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ Show if already confirmed */}
+              {booking.customerConfirmed === true && booking.bookingStatus === "COMPLETED" && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                      ✅ You have confirmed this service. Funds will be released to the vendor.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Payment Status
+                  </p>
+                  <p
+                    className={`text-sm font-medium ${
+                      booking.vendorPaymentStatus === "FULLY_PAID"
+                        ? "text-green-600"
+                        : booking.vendorPaymentStatus === "DEPOSIT_PAID"
+                          ? "text-blue-600"
+                          : "text-yellow-600"
+                    }`}
+                  >
+                    {paymentStatus.text}
+                  </p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Payout Status
+                  </p>
+                  <p
+                    className={`text-sm font-medium ${
+                      booking.payoutStatusColor === "green"
+                        ? "text-green-600"
+                        : booking.payoutStatusColor === "yellow"
+                          ? "text-yellow-600"
+                          : booking.payoutStatusColor === "blue"
+                            ? "text-blue-600"
+                            : "text-gray-600"
+                    }`}
+                  >
+                    {booking.payoutStatus}
+                  </p>
+                  {booking.fullyReleased && booking.depositReleasedAt && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Released:{" "}
+                      {new Date(booking.depositReleasedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
 
               <div>
                 <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -392,8 +570,7 @@ function BookingDetailContent() {
                         <>
                           <span className="text-gray-900 dark:text-white">
                             {new Date(booking.startDate!).toLocaleDateString()}{" "}
-                            -{" "}
-                            {new Date(booking.endDate!).toLocaleDateString()}
+                            - {new Date(booking.endDate!).toLocaleDateString()}
                           </span>
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             {booking.totalDays} days total
@@ -526,9 +703,7 @@ function BookingDetailContent() {
                       {booking.depositPaidAt && (
                         <p className="text-xs text-green-600">
                           Paid on{" "}
-                          {new Date(
-                            booking.depositPaidAt
-                          ).toLocaleDateString()}
+                          {new Date(booking.depositPaidAt).toLocaleDateString()}
                         </p>
                       )}
                     </div>
@@ -546,7 +721,7 @@ function BookingDetailContent() {
                           <p className="text-xs text-green-600">
                             Paid on{" "}
                             {new Date(
-                              booking.remainingPaidAt
+                              booking.remainingPaidAt,
                             ).toLocaleDateString()}
                           </p>
                         )}
@@ -574,7 +749,7 @@ function BookingDetailContent() {
                       <span className="text-gray-500">Released to Vendor</span>
                       <span className="text-green-600">
                         {new Date(
-                          booking.amountReleasedAt
+                          booking.amountReleasedAt,
                         ).toLocaleDateString()}
                       </span>
                     </div>
@@ -587,8 +762,8 @@ function BookingDetailContent() {
                   {booking.vendorPaymentStatus === "DEPOSIT_PAID" &&
                     !eventPassed && (
                       <>
-                        💰 Deposit paid. Remaining balance will be due after
-                        the event.
+                        💰 Deposit paid. Remaining balance will be due after the
+                        event.
                       </>
                     )}
                   {booking.vendorPaymentStatus === "DEPOSIT_PAID" &&
@@ -656,7 +831,8 @@ function BookingDetailContent() {
                       : "Cancel Booking & Request Refund"}
                   </button>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
-                    Refund policy: ≥7 days notice → 100% · 3–6 days → 50% · &lt;3 days → 0%
+                    Refund policy: ≥7 days notice → 100% · 3–6 days → 50% ·
+                    &lt;3 days → 0%
                   </p>
                 </div>
               )}
@@ -668,7 +844,6 @@ function BookingDetailContent() {
                     Cancellation &amp; Refund
                   </h2>
                   <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 space-y-3">
-
                     {booking.cancelledBy === "CUSTOMER" && (
                       <div className="flex items-center gap-2">
                         <XCircleIcon className="h-4 w-4 text-orange-500 flex-shrink-0" />
@@ -678,7 +853,7 @@ function BookingDetailContent() {
                             <span className="text-gray-500 dark:text-gray-400 ml-1">
                               on{" "}
                               {new Date(
-                                booking.cancelledAt
+                                booking.cancelledAt,
                               ).toLocaleDateString()}
                             </span>
                           )}
@@ -713,29 +888,28 @@ function BookingDetailContent() {
                       </p>
                     )}
 
-                    {booking.refundStatus &&
-                      booking.refundAmount != null && (
-                        <div className="border-t border-gray-200 dark:border-gray-600 pt-3 space-y-2">
+                    {booking.refundStatus && booking.refundAmount != null && (
+                      <div className="border-t border-gray-200 dark:border-gray-600 pt-3 space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500 dark:text-gray-400">
+                            Refund Amount
+                          </span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            NPR {booking.refundAmount.toLocaleString()}
+                          </span>
+                        </div>
+                        {booking.refundPercentage != null && (
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500 dark:text-gray-400">
-                              Refund Amount
+                              Policy Applied
                             </span>
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              NPR {booking.refundAmount.toLocaleString()}
+                            <span className="text-gray-700 dark:text-gray-300">
+                              {booking.refundPercentage}% of deposit
                             </span>
                           </div>
-                          {booking.refundPercentage != null && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500 dark:text-gray-400">
-                                Policy Applied
-                              </span>
-                              <span className="text-gray-700 dark:text-gray-300">
-                                {booking.refundPercentage}% of deposit
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                        )}
+                      </div>
+                    )}
 
                     {booking.refundStatus === "PENDING_ADMIN" && (
                       <div className="flex items-start gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
@@ -745,8 +919,8 @@ function BookingDetailContent() {
                             Refund In Progress
                           </p>
                           <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1">
-                            Your refund is being processed. This typically
-                            takes 3–7 business days.
+                            Your refund is being processed. This typically takes
+                            3–7 business days.
                           </p>
                         </div>
                       </div>
@@ -759,8 +933,8 @@ function BookingDetailContent() {
                             Refund Completed ✓
                           </p>
                           <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                            Your refund has been sent. Check your Khalti
-                            wallet or bank account.
+                            Your refund has been sent. Check your Khalti wallet
+                            or bank account.
                           </p>
                         </div>
                       </div>
@@ -800,12 +974,10 @@ function BookingDetailContent() {
                     <span className="font-mono text-xs">{booking.id}</span>
                   </p>
                   <p className="text-sm text-gray-900 dark:text-white">
-                    Created:{" "}
-                    {new Date(booking.createdAt).toLocaleString()}
+                    Created: {new Date(booking.createdAt).toLocaleString()}
                   </p>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
@@ -817,14 +989,18 @@ function BookingDetailContent() {
 // ✅ Main export with Suspense boundary
 export default function BookingDetailPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
-          <p className="mt-2 text-sm text-gray-500">Loading booking details...</p>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+            <p className="mt-2 text-sm text-gray-500">
+              Loading booking details...
+            </p>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <BookingDetailContent />
     </Suspense>
   );

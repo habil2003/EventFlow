@@ -30,6 +30,7 @@ interface Vendor {
   description: string;
   imageUrl: string | null;
   rating?: number;
+  reviewCount?: number;  // ← ADDED
   priceRange?: string;
   packages?: Package[];
   minPrice?: number;
@@ -51,7 +52,6 @@ const normalizeLocation = (location: string): string => {
 // ✅ Extract city name from full address
 const extractCity = (location: string): string => {
   if (!location) return '';
-  // Handle "Pokhara, Nepal" → "Pokhara"
   const parts = location.split(',').map(s => s.trim());
   return parts[0] || location;
 };
@@ -82,14 +82,14 @@ function MarketplaceContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedService, setSelectedService] = useState("all");
   const [selectedLocation, setSelectedLocation] = useState("all");
+  // ✅ ADD: Sort state
+  const [sortBy, setSortBy] = useState<"newest" | "rating" | "price_low" | "price_high">("newest");
 
-  // ✅ Service types from vendors
   const serviceTypes = [
     "all",
     ...new Set(vendors.map(v => v.serviceType).filter(Boolean))
   ];
 
-  // ✅ Cities extracted from vendor locations
   const cities = getUniqueCities(vendors);
 
   useEffect(() => {
@@ -138,6 +138,7 @@ function MarketplaceContent() {
     fetchVendors();
   }, []);
 
+  // ✅ UPDATED: Filter and sort vendors
   useEffect(() => {
     let filtered = [...vendors];
 
@@ -156,14 +157,30 @@ function MarketplaceContent() {
     }
 
     if (selectedLocation !== "all") {
-      // ✅ Filter by city (extracted from full location)
       filtered = filtered.filter(vendor => 
         extractCity(vendor.location).toLowerCase() === selectedLocation.toLowerCase()
       );
     }
 
+    // ✅ ADD: Sorting
+    switch (sortBy) {
+      case "rating":
+        filtered = filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        break;
+      case "price_low":
+        filtered = filtered.sort((a, b) => (a.minPrice || 0) - (b.minPrice || 0));
+        break;
+      case "price_high":
+        filtered = filtered.sort((a, b) => (b.minPrice || 0) - (a.minPrice || 0));
+        break;
+      case "newest":
+      default:
+        // Keep original order
+        break;
+    }
+
     setFilteredVendors(filtered);
-  }, [searchTerm, selectedService, selectedLocation, vendors]);
+  }, [searchTerm, selectedService, selectedLocation, vendors, sortBy]);
 
   const fadeUp = {
     hidden: { opacity: 0, y: 20 },
@@ -249,8 +266,8 @@ function MarketplaceContent() {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 mb-8 justify-center">
+        {/* Filters + Sort */}
+        <div className="flex flex-wrap gap-4 mb-8 justify-center items-center">
           {/* Service Type Filter */}
           <div className="flex items-center gap-2">
             <FunnelIcon className="h-4 w-4 text-gray-400" />
@@ -267,7 +284,7 @@ function MarketplaceContent() {
             </select>
           </div>
 
-          {/* ✅ Location Filter - Clean cities */}
+          {/* Location Filter */}
           <div className="flex items-center gap-2">
             <MapPinIcon className="h-4 w-4 text-gray-400" />
             <select
@@ -284,7 +301,22 @@ function MarketplaceContent() {
             </select>
           </div>
 
-          {/* ✅ Show count of available vendors in each location */}
+          {/* ✅ ADD: Sort Dropdown */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">Sort by:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+            >
+              <option value="newest">Newest</option>
+              <option value="rating">Highest Rated</option>
+              <option value="price_low">Price: Low to High</option>
+              <option value="price_high">Price: High to Low</option>
+            </select>
+          </div>
+
+          {/* Show count */}
           <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center">
             <span>{vendors.length} vendors available</span>
           </div>
@@ -337,6 +369,16 @@ function MarketplaceContent() {
                           <BuildingOfficeIcon className="h-16 w-16 text-indigo-400" />
                         </div>
                       )}
+
+                      {/* ✅ ADD: Top Rated Badge */}
+                      {vendor.rating && vendor.rating >= 4.5 && vendor.reviewCount && vendor.reviewCount >= 3 && (
+                        <div className="absolute top-2 right-2 z-10">
+                          <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-0.5">
+                            <StarIcon className="h-3 w-3 fill-current" />
+                            Top Rated
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="p-5 flex-1 flex flex-col">
@@ -344,12 +386,35 @@ function MarketplaceContent() {
                         <div className="text-3xl">
                           {getServiceIcon(vendor.serviceType)}
                         </div>
-                        {vendor.rating && (
-                          <div className="flex items-center">
-                            <StarIcon className="h-4 w-4 text-amber-500 fill-current" />
-                            <span className="ml-1 text-sm text-gray-600 dark:text-gray-400">{vendor.rating}</span>
-                          </div>
-                        )}
+                        {/* ✅ IMPROVED: Rating Display with Stars */}
+                        <div className="flex items-center gap-1">
+                          {vendor.rating ? (
+                            <div className="flex items-center gap-1">
+                              <div className="flex">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <StarIcon
+                                    key={star}
+                                    className={`h-3.5 w-3.5 ${
+                                      star <= Math.round(vendor.rating || 0)
+                                        ? "text-yellow-400 fill-current"
+                                        : "text-gray-300 dark:text-gray-600"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {vendor.rating.toFixed(1)}
+                              </span>
+                              {vendor.reviewCount !== undefined && vendor.reviewCount > 0 && (
+                                <span className="text-xs text-gray-400">
+                                  ({vendor.reviewCount})
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">New vendor</span>
+                          )}
+                        </div>
                       </div>
 
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 line-clamp-1">

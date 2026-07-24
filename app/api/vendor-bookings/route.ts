@@ -1,9 +1,9 @@
 // app/api/vendor-bookings/route.ts
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateTransactionId, toPaisa } from '@/lib/payment';
 
 export async function POST(request: Request) {
   try {
@@ -240,18 +240,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create payment transaction for deposit
-    const paymentTransaction = await prisma.paymentTransaction.create({
-      data: {
-        transactionId: generateTransactionId('vendor'),
-        amount: depositAmount,
-        amountInPaisa: toPaisa(depositAmount),
-        gateway: 'KHALTI',
-        paymentType: 'VENDOR_DEPOSIT',
-        vendorBookingId: booking.id,
-        status: 'PENDING'
-      }
-    });
+    // ✅ REMOVED: Payment transaction creation - will be created during payment initiation
 
     return NextResponse.json({
       success: true,
@@ -264,7 +253,7 @@ export async function POST(request: Request) {
       discountPercent: discountPercent,
       discountAmount: discountAmount,
       requiresPayment: true,
-      paymentTransactionId: paymentTransaction.transactionId,
+      // ✅ REMOVED: paymentTransactionId from response
       message: "Please complete the payment to confirm your booking."
     }, { status: 201 });
 

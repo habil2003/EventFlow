@@ -121,7 +121,7 @@ async function releaseSingleTicketFunds(
     transactionId: `pending_bulk_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
   };
 
-  // ✅ Link to parent bulk payout using bulkPayoutId directly
+  // ✅ Link to parent bulk payout using bulkPayoutId
   if (bulkPayoutId) {
     payoutData.bulkPayoutId = bulkPayoutId;
   }
@@ -150,7 +150,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ✅ Remove unused eventId from destructuring
     const { bookingIds } = await request.json();
 
     console.log("Bulk ticket release request:", {
@@ -176,7 +175,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // ✅ Get event details - organizer is the User
+    // Get event details
     const firstBooking = await prisma.ticketBooking.findUnique({
       where: { id: bookingIds[0] },
       include: {
@@ -185,7 +184,6 @@ export async function POST(request: Request) {
             organizer: true,
           },
         },
-        // ✅ user: true - removed, not needed
       },
     });
 
@@ -301,7 +299,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // Create the bulk payout record (parent)
+    // ✅ Create the bulk payout record (parent)
     const bulkPayout = await prisma.payout.create({
       data: {
         vendorId: organizerVendorProfile.id,
@@ -317,11 +315,13 @@ export async function POST(request: Request) {
       },
     });
 
+    console.log("✅ Created bulk payout parent:", bulkPayout.id);
+
     const results = [];
     const errors = [];
     let successCount = 0;
 
-    // Process each booking - link to bulk payout
+    // ✅ Process each booking - link to bulk payout using bulkPayoutId
     for (const booking of allBookings) {
       try {
         const result = await releaseSingleTicketFunds(
@@ -329,7 +329,7 @@ export async function POST(request: Request) {
           session.user.id,
           session.user.email || "admin",
           eventTitle,
-          bulkPayout.id,
+          bulkPayout.id, // ✅ Pass bulkPayoutId to link child
         );
         results.push(result);
         successCount++;
@@ -341,6 +341,13 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    // ✅ Verify all child payouts are linked
+    const childPayouts = await prisma.payout.findMany({
+      where: { bulkPayoutId: bulkPayout.id },
+    });
+
+    console.log(`✅ Created ${childPayouts.length} child payouts linked to bulk payout`);
 
     return NextResponse.json({
       success: true,
@@ -356,6 +363,7 @@ export async function POST(request: Request) {
         totalCommission: totalCommission,
         totalPayout: totalPayout,
         ticketCount: allBookings.length,
+        childCount: childPayouts.length,
       },
       summary: {
         successCount: successCount,

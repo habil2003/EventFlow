@@ -62,6 +62,18 @@ enum VendorPaymentStatus {
   PROCESSING_PAYOUT
 }
 
+enum RefundStatus {
+  PENDING_ADMIN
+  PROCESSED
+  FAILED
+  CANCELLED
+}
+
+enum RatingType {
+  VENDOR
+  EVENT
+}
+
 // ==========================================
 // 2. CORE USER MANAGEMENT
 // ==========================================
@@ -82,7 +94,6 @@ model User {
   resetPasswordToken     String?
   resetPasswordExpires   DateTime?
 
-  // Relationships
   organizedEvents  TicketedEvent[]   @relation("OrganizerToEvents")
   organizerProfile OrganizerProfile?
   vendorProfile    VendorProfile?
@@ -91,6 +102,8 @@ model User {
   vendorBookings   VendorBooking[]
   processedPayouts Payout[] @relation("AdminPayouts")
   ticketReservations TicketReservation[]
+  disputes         Dispute[]
+  ratings          Rating[]
 }
 
 // ==========================================
@@ -124,7 +137,6 @@ model TicketedEvent {
   updatedAt     DateTime @updatedAt
   isActive      Boolean  @default(true)
   
-  // ✅ ADD THESE TWO LINES
   isCompleted   Boolean  @default(false)
   completedAt   DateTime?
 
@@ -132,6 +144,7 @@ model TicketedEvent {
   ticketTiers TicketTier[]
   bookings    TicketBooking[]
   reservations TicketReservation[]
+  ratings Rating[] @relation("eventRatings")
 }
 
 model TicketTier {
@@ -166,11 +179,10 @@ model TicketBooking {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  paymentIntentId String?      // Link to PaymentTransaction
+  paymentIntentId String?
   escrowReleased  Boolean      @default(false)
   amountReleasedAt DateTime?
 
-  // ✅ ADD THIS RELATION
   payouts Payout[]
 
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -178,6 +190,7 @@ model TicketBooking {
   tier                TicketTier           @relation(fields: [tierId], references: [id], onDelete: Cascade)
   paymentTransactions PaymentTransaction[]
   refunds             Refund[]
+  ratings Rating[] @relation("ticketRatings")
 }
 
 model TicketReservation {
@@ -187,7 +200,7 @@ model TicketReservation {
   userId    String
   quantity  Int
   expiresAt DateTime
-  status    String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED, EXPIRED
+  status    String   @default("PENDING")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -203,14 +216,14 @@ model TicketReservation {
 }
 
 // ==========================================
-// 4. SOCIAL EVENTS & VENDOR MODULE (UPDATED)
+// 4. SOCIAL EVENTS & VENDOR MODULE
 // ==========================================
 
 model VendorProfile {
   id            String   @id @default(cuid())
   userId        String   @unique
   businessName  String
-  serviceType   String // catering, venue, photography, etc.
+  serviceType   String
   location      String
   description   String?
   imageUrl      String?
@@ -221,8 +234,9 @@ model VendorProfile {
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   servicePackages ServicePackage[]
   vendorBookings  VendorBooking[]
-  payouts        Payout[]
+  payouts         Payout[]
   unavailableDates VendorUnavailableDate[]
+  ratings Rating[] @relation("vendorRatings")
 }
 
 model ServicePackage {
@@ -237,13 +251,11 @@ model ServicePackage {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // ========== NEW FIELDS ==========
-  pricingType    String @default("fixed") // "fixed" or "per_person"
-  minGuests      Int? // Minimum guests required
-  maxGuests      Int? // Maximum guests capable
-  serviceDetails Json? // Flexible JSON for service-specific data
-  status         String @default("draft") // "draft", "active", "inactive"
-  // ========== END NEW FIELDS ==========
+  pricingType    String  @default("fixed")
+  minGuests      Int?
+  maxGuests      Int?
+  serviceDetails Json?
+  status         String  @default("draft")
 
   vendor         VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   packageAddOns  PackageAddOn[]
@@ -259,9 +271,7 @@ model PackageAddOn {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  // ========== NEW FIELD ==========
-  pricingType String @default("fixed") // "fixed" or "per_person"
-  // ========== END NEW FIELD ==========
+  pricingType String @default("fixed")
 
   servicePackage ServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
   bookingAddOns  BookingAddOn[]
@@ -289,16 +299,16 @@ model VendorBooking {
   packageId         String
   totalAmount       Decimal             @db.Decimal(10, 2)
   bookingStatus     BookingStatus       @default(PENDING)
-  paymentStatus     PaymentStatus @default(PENDING)
+  paymentStatus     PaymentStatus       @default(PENDING)
   gateway           String
   transactionId     String?             @unique
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
-  startDate         DateTime           // When event starts
-  endDate           DateTime            // When event ends
-  totalDays         Int                 // Calculated: endDate - startDate + 1
-  dailyRate         Decimal             @db.Decimal(10, 2) // Price per day
-  bookingReference  String              @unique // For idempotency
+  startDate         DateTime
+  endDate           DateTime
+  totalDays         Int
+  dailyRate         Decimal             @db.Decimal(10, 2)
+  bookingReference  String              @unique
 
   userSocialEvent UserSocialEvent @relation(fields: [userSocialEventId], references: [id], onDelete: Cascade)
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -314,20 +324,19 @@ model VendorBooking {
   depositPaidAt        DateTime?
   remainingPaidAt      DateTime?
   amountReleasedAt     DateTime?
-  customerConfirmed    Boolean   @default(false)
+  customerConfirmed    Boolean   @default(false)   // ← KEEP ONLY ONE
   vendorMarkedComplete Boolean   @default(false)
   refundEligible       Boolean   @default(true)
 
-  // ✅ NEW FIELDS FOR CANCELLATION TRACKING
-  cancelledBy         String?   // "CUSTOMER" or "VENDOR" or "ADMIN"
+  cancelledBy         String?
   cancellationReason  String?
   cancelledAt         DateTime?
 
-  // Relations
   paymentTransactions PaymentTransaction[]
   refunds             Refund[]
   vendorPaymentStatus VendorPaymentStatus @default(PENDING)
   payouts            Payout[]
+  ratings Rating[] @relation("bookingRatings")
 }
 
 model BookingAddOn {
@@ -356,6 +365,7 @@ model Dispute {
   updatedAt     DateTime @updatedAt
 
   vendorBooking VendorBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PaymentTransaction {
@@ -392,7 +402,7 @@ model Refund {
   originalTransactionId String
   refundAmount          Decimal @db.Decimal(10, 2)
   refundReason          String
-  refundStatus          String  @default("PENDING")
+  refundStatus         RefundStatus @default(PENDING_ADMIN)
   gatewayRefundId       String?
   gatewayResponse       Json?
 
@@ -420,7 +430,7 @@ model Payout {
   amount          Decimal  @db.Decimal(10, 2)
   platformCommission Decimal @db.Decimal(10, 2) @default(0)
   vendorPayout    Decimal  @db.Decimal(10, 2) @default(0)
-  type            String   // "DEPOSIT", "REMAINING", "TICKET_SALES", "TICKET_SALES_BULK"
+  type            String
   status          String   @default("PENDING")
   adminId         String?
   transactionId   String?  @unique
@@ -430,12 +440,10 @@ model Payout {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // ✅ Self-relation for bulk payouts - FIXED
   bulkPayoutId    String?   
   parentPayout    Payout?   @relation("PayoutBulkRelation", fields: [bulkPayoutId], references: [id], onDelete: SetNull)
   childPayouts    Payout[]  @relation("PayoutBulkRelation")
 
-  // Relations
   vendorBooking VendorBooking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   ticketBooking TicketBooking? @relation(fields: [ticketBookingId], references: [id], onDelete: SetNull)
   vendor        VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
@@ -459,4 +467,47 @@ model VendorUnavailableDate {
   vendor VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 
   @@unique([vendorId, date])
+}
+
+// ==========================================
+// 7. RATINGS & REVIEWS
+// ==========================================
+
+model Rating {
+  id          String     @id @default(cuid())
+  rating      Int        // 1-5 stars
+  review      String?    // Optional text review
+  type        RatingType // VENDOR or EVENT
+
+  // Who gave the rating
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // For vendor ratings
+  vendorId    String?
+  vendor      VendorProfile? @relation("vendorRatings", fields: [vendorId], references: [id], onDelete: Cascade)
+
+  // For event ratings
+  eventId     String?
+  event       TicketedEvent? @relation("eventRatings", fields: [eventId], references: [id], onDelete: Cascade)
+
+  // Link to booking (for verification)
+  vendorBookingId String?
+  vendorBooking   VendorBooking? @relation("bookingRatings", fields: [vendorBookingId], references: [id], onDelete: SetNull)
+
+  ticketBookingId String?
+  ticketBooking   TicketBooking? @relation("ticketRatings", fields: [ticketBookingId], references: [id], onDelete: SetNull)
+
+  // Verification - only verified purchases can review
+  isVerified  Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Prevent duplicate reviews
+  @@unique([userId, vendorId, vendorBookingId])
+  @@unique([userId, eventId, ticketBookingId])
+  @@index([vendorId])
+  @@index([eventId])
+  @@index([userId])
 }

@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
-// Helper functions
 async function generateTicketNumber(eventId: string): Promise<string> {
   const count = await prisma.ticketBooking.count({
     where: { eventId: eventId },
@@ -45,14 +44,11 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const purchaseOrderId = searchParams.get('purchase_order_id');
 
-    // ✅ Get base URL for absolute redirects
     const baseUrl = request.nextUrl.origin;
 
     console.log('📡 [payment-callback] Request received');
-    console.log('📍 [payment-callback] Request URL:', request.url);
-    console.log('📡 [payment-callback] Params:', { pidx, purchaseOrderId, status });
+    console.log('📍 [payment-callback] Params:', { pidx, purchaseOrderId, status });
 
-    // ✅ If no purchaseOrderId, redirect
     if (!purchaseOrderId) {
       console.log('⚠️ [payment-callback] No purchase_order_id - redirecting');
       return NextResponse.redirect(
@@ -60,7 +56,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Find the payment transaction
     const paymentTransaction = await prisma.paymentTransaction.findFirst({
       where: {
         transactionId: purchaseOrderId,
@@ -78,17 +73,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // ✅ Get reservation ID from gatewayResponse
     const gatewayResponse = paymentTransaction.gatewayResponse as any;
-    console.log('📍 [payment-callback] Gateway response:', JSON.stringify(gatewayResponse));
-
-    // ✅ Extract reservationId - from the stored gatewayResponse
     const reservationId = gatewayResponse?.reservationId;
 
     console.log('📍 [payment-callback] Reservation ID:', reservationId);
 
-    // ✅ Check if already processed
-    if (paymentTransaction.status === 'SUCCESS') {
+    // ✅ FIXED: Use 'COMPLETED' instead of 'SUCCESS'
+    if (paymentTransaction.status === 'COMPLETED') {
       console.log('✅ [payment-callback] Payment already processed');
       return NextResponse.redirect(
         `${baseUrl}/my-tickets?payment=already_processed`
@@ -98,7 +89,6 @@ export async function GET(request: NextRequest) {
     if (status === 'Completed') {
       console.log('✅ [payment-callback] Payment successful for transaction:', purchaseOrderId);
 
-      // ✅ Validate reservation exists
       if (!reservationId) {
         console.error('❌ [payment-callback] No reservation ID found in gatewayResponse');
         return NextResponse.redirect(
@@ -106,7 +96,6 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // ✅ Find the reservation
       const reservation = await prisma.ticketReservation.findUnique({
         where: { id: reservationId },
         include: {
@@ -122,25 +111,22 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // ✅ Convert reservation to tickets
       const result = await prisma.$transaction(async (prisma) => {
-        // 1. Update payment transaction
+        // ✅ FIXED: Use 'COMPLETED' instead of 'SUCCESS'
         await prisma.paymentTransaction.update({
           where: { id: paymentTransaction.id },
           data: {
-            status: 'SUCCESS',
+            status: 'COMPLETED',
             gatewayTransactionId: pidx,
             gatewayResponse: { pidx, status, purchaseOrderId },
           },
         });
 
-        // 2. Update ticket tier sold count
         await prisma.ticketTier.update({
           where: { id: reservation.tierId },
           data: { soldCount: { increment: reservation.quantity } },
         });
 
-        // 3. Create tickets
         const tickets = [];
         for (let i = 0; i < reservation.quantity; i++) {
           const ticketNumber = await generateTicketNumber(reservation.eventId);
@@ -164,7 +150,6 @@ export async function GET(request: NextRequest) {
           tickets.push(ticket);
         }
 
-        // 4. Delete reservation
         await prisma.ticketReservation.delete({
           where: { id: reservation.id },
         });
@@ -180,16 +165,13 @@ export async function GET(request: NextRequest) {
     } else {
       console.log('❌ [payment-callback] Payment failed for transaction:', purchaseOrderId);
       
-      // ✅ Cleanup - delete reservation and transaction
       await prisma.$transaction(async (prisma) => {
-        // Delete reservation
         if (reservationId) {
           await prisma.ticketReservation.delete({
             where: { id: reservationId }
           });
         }
         
-        // Update transaction to FAILED
         await prisma.paymentTransaction.update({
           where: { id: paymentTransaction.id },
           data: { 

@@ -31,9 +31,13 @@ import {
   CakeIcon,
   GiftIcon,
   ArrowPathIcon,
-  HeartIcon
+  HeartIcon,
 } from "@heroicons/react/24/outline";
-import { FireIcon as FireSolid, HeartIcon as HeartSolid, StarIcon as StarSolid } from "@heroicons/react/24/solid";
+import {
+  FireIcon as FireSolid,
+  HeartIcon as HeartSolid,
+  StarIcon as StarSolid,
+} from "@heroicons/react/24/solid";
 
 interface Event {
   id: string;
@@ -50,6 +54,8 @@ interface Vendor {
   serviceType: string;
   location: string;
   imageUrl: string | null;
+  rating?: number;
+  reviewCount?: number;
 }
 
 export default function HomePage() {
@@ -67,15 +73,21 @@ export default function HomePage() {
   });
   const [loading, setLoading] = useState(true);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
-  const [floatingHearts, setFloatingHearts] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [floatingHearts, setFloatingHearts] = useState<
+    { id: number; x: number; y: number }[]
+  >([]);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [activeCategory, setActiveCategory] = useState<"social" | "ticketed">("social");
+  const [activeCategory, setActiveCategory] = useState<"social" | "ticketed">(
+    "social",
+  );
 
   // Theme management
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
     const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
     setTheme(initialTheme);
     document.documentElement.classList.toggle("dark", initialTheme === "dark");
@@ -100,9 +112,9 @@ export default function HomePage() {
   // Floating hearts animation
   const createFloatingHeart = (x: number, y: number) => {
     const newHeart = { id: Date.now(), x, y };
-    setFloatingHearts(prev => [...prev, newHeart]);
+    setFloatingHearts((prev) => [...prev, newHeart]);
     setTimeout(() => {
-      setFloatingHearts(prev => prev.filter(h => h.id !== newHeart.id));
+      setFloatingHearts((prev) => prev.filter((h) => h.id !== newHeart.id));
     }, 2000);
   };
 
@@ -122,11 +134,10 @@ export default function HomePage() {
     }
   }, [session, router]);
 
-  // ✅ FIXED: Fetch data with proper array extraction
+  // Fetch data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Helper to safely extract array from response
         const extractEvents = (data: any): Event[] => {
           if (Array.isArray(data)) return data;
           if (data?.events && Array.isArray(data.events)) return data.events;
@@ -139,21 +150,18 @@ export default function HomePage() {
           return [];
         };
 
-        // Fetch events
         const eventsRes = await fetch("/api/events?limit=4");
         if (eventsRes.ok) {
           const eventsData = await eventsRes.json();
           setFeaturedEvents(extractEvents(eventsData).slice(0, 4));
         }
 
-        // Fetch vendors
         const vendorsRes = await fetch("/api/vendors?limit=4");
         if (vendorsRes.ok) {
           const vendorsData = await vendorsRes.json();
           setFeaturedVendors(extractVendors(vendorsData).slice(0, 4));
         }
 
-        // Fetch stats
         const statsRes = await fetch("/api/public/stats");
         if (statsRes.ok) {
           const statsData = await statsRes.json();
@@ -197,7 +205,7 @@ export default function HomePage() {
 
   const fadeUp = {
     hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
+    visible: { opacity: 1, y: 0 },
   };
 
   const floatingIcons = [
@@ -210,17 +218,27 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300 overflow-x-hidden">
-
       {/* Floating Hearts */}
       <AnimatePresence>
-        {floatingHearts.map(heart => (
+        {floatingHearts.map((heart) => (
           <motion.div
             key={heart.id}
             initial={{ opacity: 1, scale: 1, y: 0, x: 0 }}
-            animate={{ opacity: 0, scale: 0, y: -100, x: (Math.random() - 0.5) * 100 }}
+            animate={{
+              opacity: 0,
+              scale: 0,
+              y: -100,
+              x: (Math.random() - 0.5) * 100,
+            }}
             exit={{ opacity: 0 }}
             transition={{ duration: 2, ease: "easeOut" }}
-            style={{ position: "fixed", left: heart.x, top: heart.y, zIndex: 1000, pointerEvents: "none" }}
+            style={{
+              position: "fixed",
+              left: heart.x,
+              top: heart.y,
+              zIndex: 1000,
+              pointerEvents: "none",
+            }}
           >
             <HeartSolid className="h-6 w-6 text-pink-500" />
           </motion.div>
@@ -237,13 +255,13 @@ export default function HomePage() {
               opacity: [0, 0.1, 0.1, 0],
               scale: [1, 1.2, 1.2, 1],
               x: [0, 50, -30, 0],
-              y: [0, -30, 50, 0]
+              y: [0, -30, 50, 0],
             }}
             transition={{
               duration: 8,
               delay: item.delay,
               repeat: Infinity,
-              repeatType: "reverse"
+              repeatType: "reverse",
             }}
             style={{ position: "absolute", left: item.x, top: item.y }}
             className="text-indigo-200 dark:text-indigo-800/30"
@@ -255,7 +273,6 @@ export default function HomePage() {
 
       {/* Main Content - Marketing Only */}
       <main>
-
         {/* Hero Section */}
         <motion.div
           initial="hidden"
@@ -266,7 +283,12 @@ export default function HomePage() {
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
+            transition={{
+              type: "spring",
+              stiffness: 200,
+              damping: 15,
+              delay: 0.2,
+            }}
             className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-4 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4 cursor-pointer border border-indigo-200 dark:border-indigo-800"
             whileHover={{ scale: 1.05 }}
             onClick={(e) => createFloatingHeart(e.clientX, e.clientY)}
@@ -288,7 +310,7 @@ export default function HomePage() {
             transition={{ duration: 5, repeat: Infinity }}
             style={{ backgroundSize: "200% 200%" }}
           >
-            Plan Your Event.{' '}
+            Plan Your Event.{" "}
             <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent animate-gradient">
               Buy Tickets.
             </span>
@@ -300,8 +322,8 @@ export default function HomePage() {
             transition={{ delay: 0.3 }}
             className="mx-auto mt-4 max-w-2xl text-base text-gray-500 dark:text-gray-400 sm:text-lg"
           >
-            Nepal's first dual-module event management platform.
-            Create ticketed events, book vendors, and manage everything in one place.
+            Nepal's first dual-module event management platform. Create ticketed
+            events, book vendors, and manage everything in one place.
           </motion.p>
 
           <motion.div
@@ -346,10 +368,9 @@ export default function HomePage() {
           </motion.div>
         </motion.div>
 
-        {/* Two Main Categories - Redesigned without belt-like headers */}
+        {/* Two Main Categories */}
         <div className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
             {/* Social Events Card */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
@@ -359,9 +380,7 @@ export default function HomePage() {
               className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700 cursor-pointer group relative"
               onMouseEnter={() => setActiveCategory("social")}
             >
-              {/* Decorative accent instead of belt */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-400 to-rose-500" />
-
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -371,7 +390,9 @@ export default function HomePage() {
                     >
                       <span className="text-3xl">🎉</span>
                     </motion.div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Social Events</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      Social Events
+                    </h2>
                   </div>
                   <motion.div
                     animate={{ rotate: [0, 10, -10, 0] }}
@@ -381,16 +402,20 @@ export default function HomePage() {
                     <HeartSolid className="h-12 w-12" />
                   </motion.div>
                 </div>
-
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  Plan weddings, birthday parties, religious ceremonies, and more. Find and book trusted vendors.
+                  Plan weddings, birthday parties, religious ceremonies, and
+                  more. Find and book trusted vendors.
                 </p>
-
                 <motion.div
                   className="flex flex-wrap gap-2 mb-4"
                   animate={{ y: activeCategory === "social" ? 0 : 10 }}
                 >
-                  {["Weddings", "Birthday Parties", "Religious Ceremonies", "Anniversaries"].map((tag, i) => (
+                  {[
+                    "Weddings",
+                    "Birthday Parties",
+                    "Religious Ceremonies",
+                    "Anniversaries",
+                  ].map((tag, i) => (
                     <motion.span
                       key={tag}
                       initial={{ opacity: 0, scale: 0 }}
@@ -403,7 +428,6 @@ export default function HomePage() {
                     </motion.span>
                   ))}
                 </motion.div>
-
                 <motion.div whileHover={{ x: 5 }}>
                   <Link
                     href="/login"
@@ -430,9 +454,7 @@ export default function HomePage() {
               className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700 cursor-pointer group relative"
               onMouseEnter={() => setActiveCategory("ticketed")}
             >
-              {/* Decorative accent instead of belt */}
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 to-cyan-500" />
-
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -442,39 +464,45 @@ export default function HomePage() {
                     >
                       <span className="text-3xl">🎟️</span>
                     </motion.div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Ticketed Events</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      Ticketed Events
+                    </h2>
                   </div>
                   <motion.div
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                    transition={{
+                      duration: 8,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
                     className="text-blue-400 opacity-30"
                   >
                     <TicketIcon className="h-12 w-12" />
                   </motion.div>
                 </div>
-
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  Discover and buy tickets for concerts, workshops, seminars, and conferences.
+                  Discover and buy tickets for concerts, workshops, seminars,
+                  and conferences.
                 </p>
-
                 <motion.div
                   className="flex flex-wrap gap-2 mb-4"
                   animate={{ y: activeCategory === "ticketed" ? 0 : 10 }}
                 >
-                  {["Concerts", "Workshops", "IT Seminars", "Conferences"].map((tag, i) => (
-                    <motion.span
-                      key={tag}
-                      initial={{ opacity: 0, scale: 0 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.1 }}
-                      whileHover={{ scale: 1.05, backgroundColor: "#dbeafe" }}
-                      className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full text-sm cursor-pointer transition-colors"
-                    >
-                      {tag}
-                    </motion.span>
-                  ))}
+                  {["Concerts", "Workshops", "IT Seminars", "Conferences"].map(
+                    (tag, i) => (
+                      <motion.span
+                        key={tag}
+                        initial={{ opacity: 0, scale: 0 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: i * 0.1 }}
+                        whileHover={{ scale: 1.05, backgroundColor: "#dbeafe" }}
+                        className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full text-sm cursor-pointer transition-colors"
+                      >
+                        {tag}
+                      </motion.span>
+                    ),
+                  )}
                 </motion.div>
-
                 <motion.div whileHover={{ x: 5 }}>
                   <Link
                     href="/login"
@@ -512,15 +540,37 @@ export default function HomePage() {
                   <FireIcon className="h-8 w-8 text-indigo-600" />
                 </div>
               </motion.div>
-              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">How It Works</h2>
-              <p className="mt-2 text-gray-500 dark:text-gray-400">Simple steps to get started</p>
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mt-4">
+                How It Works
+              </h2>
+              <p className="mt-2 text-gray-500 dark:text-gray-400">
+                Simple steps to get started
+              </p>
             </motion.div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                { step: "1", title: "Choose", desc: "Select social event or ticketed event", icon: SparklesIcon, color: "from-amber-400 to-orange-500" },
-                { step: "2", title: "Book / Buy", desc: "Select package or ticket tier", icon: CreditCardIcon, color: "from-emerald-400 to-green-500" },
-                { step: "3", title: "Enjoy", desc: "Pay online and attend your event", icon: HeartIcon, color: "from-rose-400 to-pink-500" },
+                {
+                  step: "1",
+                  title: "Choose",
+                  desc: "Select social event or ticketed event",
+                  icon: SparklesIcon,
+                  color: "from-amber-400 to-orange-500",
+                },
+                {
+                  step: "2",
+                  title: "Book / Buy",
+                  desc: "Select package or ticket tier",
+                  icon: CreditCardIcon,
+                  color: "from-emerald-400 to-green-500",
+                },
+                {
+                  step: "3",
+                  title: "Enjoy",
+                  desc: "Pay online and attend your event",
+                  icon: HeartIcon,
+                  color: "from-rose-400 to-pink-500",
+                },
               ].map((item, idx) => (
                 <motion.div
                   key={idx}
@@ -539,21 +589,30 @@ export default function HomePage() {
                     <item.icon className="h-10 w-10 text-white" />
                     <motion.div
                       animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ delay: idx * 0.5, duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
+                      transition={{
+                        delay: idx * 0.5,
+                        duration: 0.5,
+                        repeat: Infinity,
+                        repeatDelay: 2,
+                      }}
                       className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-indigo-500 text-white text-sm font-bold flex items-center justify-center shadow-md"
                     >
                       {item.step}
                     </motion.div>
                   </motion.div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mt-4">{item.title}</h3>
-                  <p className="text-gray-500 dark:text-gray-400 mt-2">{item.desc}</p>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mt-4">
+                    {item.title}
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 mt-2">
+                    {item.desc}
+                  </p>
                 </motion.div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Featured Events Section - FIXED IMAGE DISPLAY */}
+        {/* Featured Events Section */}
         {featuredEvents.length > 0 && (
           <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
             <motion.div
@@ -567,7 +626,9 @@ export default function HomePage() {
                   <FireIcon className="h-6 w-6 text-orange-500" />
                   Upcoming Events
                 </h2>
-                <p className="text-gray-500 dark:text-gray-400 mt-1">Don't miss out on these popular events</p>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">
+                  Don't miss out on these popular events
+                </p>
               </div>
               <motion.div whileHover={{ x: 5 }}>
                 <Link
@@ -582,9 +643,10 @@ export default function HomePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredEvents.map((event, idx) => {
-                const minPrice = event.ticketTiers?.length > 0
-                  ? Math.min(...event.ticketTiers.map(t => t.price))
-                  : 0;
+                const minPrice =
+                  event.ticketTiers?.length > 0
+                    ? Math.min(...event.ticketTiers.map((t) => t.price))
+                    : 0;
                 return (
                   <motion.div
                     key={event.id}
@@ -597,7 +659,7 @@ export default function HomePage() {
                     onHoverEnd={() => setHoveredCard(null)}
                     className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden cursor-pointer group h-full flex flex-col"
                   >
-                    {/* Event Image - FIXED: No empty space */}
+                    {/* Event Image */}
                     <div className="relative w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800">
                       {event.imageUrl ? (
                         <div className="w-full">
@@ -615,8 +677,6 @@ export default function HomePage() {
                           <PhotoIcon className="h-8 w-8 text-indigo-400" />
                         </div>
                       )}
-
-                      {/* HOT badge */}
                       <div className="absolute top-2 right-2 z-10">
                         <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-md">
                           🔥 HOT
@@ -625,10 +685,14 @@ export default function HomePage() {
                     </div>
 
                     <div className="p-4 flex-1 flex flex-col">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">{event.title}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
+                        {event.title}
+                      </h3>
                       <div className="flex items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400">
                         <CalendarIcon className="h-3 w-3 flex-shrink-0" />
-                        <span>{new Date(event.eventDate).toLocaleDateString()}</span>
+                        <span>
+                          {new Date(event.eventDate).toLocaleDateString()}
+                        </span>
                         <MapPinIcon className="h-3 w-3 ml-2 flex-shrink-0" />
                         <span className="truncate">{event.location}</span>
                       </div>
@@ -652,7 +716,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Featured Vendors Section - FIXED IMAGE DISPLAY */}
+        {/* ✅ Top Rated Vendors Section - FIXED */}
         {featuredVendors.length > 0 && (
           <div className="bg-white dark:bg-gray-800 py-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -667,7 +731,9 @@ export default function HomePage() {
                     <StarIcon className="h-6 w-6 text-yellow-500" />
                     Top Rated Vendors
                   </h2>
-                  <p className="text-gray-500 dark:text-gray-400 mt-1">Trusted professionals for your event</p>
+                  <p className="text-gray-500 dark:text-gray-400 mt-1">
+                    Trusted professionals for your event
+                  </p>
                 </div>
                 <motion.div whileHover={{ x: 5 }}>
                   <Link
@@ -681,62 +747,94 @@ export default function HomePage() {
               </motion.div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {featuredVendors.map((vendor, idx) => (
-                  <motion.div
-                    key={vendor.id}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: idx * 0.1, type: "spring" }}
-                    whileHover={{ scale: 1.05, y: -5 }}
-                    className="bg-gray-50 dark:bg-gray-700/50 rounded-xl overflow-hidden cursor-pointer group border border-gray-100 dark:border-gray-700 h-full flex flex-col"
-                  >
-                    {/* FIXED: Vendor Image with proper aspect ratio */}
-                    <div className="relative w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 overflow-hidden">
-                      {vendor.imageUrl ? (
-                        <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                          <motion.img
-                            src={vendor.imageUrl}
-                            alt={vendor.businessName}
-                            className="absolute inset-0 w-full h-full object-contain bg-gray-100 dark:bg-gray-800"
-                            whileHover={{ scale: 1.05 }}
-                            transition={{ duration: 0.3 }}
-                            loading="lazy"
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-full h-32 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 flex items-center justify-center">
-                          <BuildingOfficeIcon className="h-8 w-8 text-indigo-400" />
-                        </div>
-                      )}
+                {featuredVendors.map((vendor, idx) => {
+                  const rating = vendor.rating || 0;
+                  const reviewCount = vendor.reviewCount || 0;
+                  const hasReviews = reviewCount > 0;
 
-                      {/* Rating badge */}
-                      <div className="absolute top-2 left-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-md z-10">
-                        <StarSolid className="h-3 w-3" />
-                        4.9
-                      </div>
-                    </div>
-
-                    <div className="p-4 flex-1 flex flex-col">
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">{vendor.businessName}</h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{vendor.serviceType}</p>
-                      <div className="flex items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        <MapPinIcon className="h-3 w-3 flex-shrink-0" />
-                        <span className="truncate">{vendor.location}</span>
-                      </div>
-                      <div className="mt-3">
-                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                          <Link
-                            href="/login"
-                            className="inline-block w-full text-center px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm rounded-lg hover:shadow-md transition-all font-medium"
+                  return (
+                    <motion.div
+                      key={vendor.id}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.1, type: "spring" }}
+                      whileHover={{ scale: 1.05, y: -5 }}
+                      className="bg-gray-50 dark:bg-gray-700/50 rounded-xl overflow-hidden cursor-pointer group border border-gray-100 dark:border-gray-700 h-full flex flex-col"
+                    >
+                      <div className="relative w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 overflow-hidden">
+                        {vendor.imageUrl ? (
+                          <div
+                            className="relative w-full"
+                            style={{ paddingBottom: "56.25%" }}
                           >
-                            View Packages
-                          </Link>
-                        </motion.div>
+                            <motion.img
+                              src={vendor.imageUrl}
+                              alt={vendor.businessName}
+                              className="absolute inset-0 w-full h-full object-contain bg-gray-100 dark:bg-gray-800"
+                              whileHover={{ scale: 1.05 }}
+                              transition={{ duration: 0.3 }}
+                              loading="lazy"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-32 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 flex items-center justify-center">
+                            <BuildingOfficeIcon className="h-8 w-8 text-indigo-400" />
+                          </div>
+                        )}
+
+                        {/* Rating Badge */}
+                        {hasReviews ? (
+                          <div className="absolute top-2 left-2 bg-gradient-to-r from-yellow-400 to-yellow-500 text-white px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-md z-10">
+                            <StarSolid className="h-3 w-3" />
+                            {rating.toFixed(1)}
+                            <span className="text-[10px] opacity-80">
+                              ({reviewCount})
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="absolute top-2 left-2 bg-gray-500/80 text-white px-2 py-1 rounded-full text-xs font-bold shadow-md z-10">
+                            New
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
+
+                      <div className="p-4 flex-1 flex flex-col">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white line-clamp-1">
+                          {vendor.businessName}
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">
+                          {vendor.serviceType}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          <MapPinIcon className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{vendor.location}</span>
+                        </div>
+
+                        {hasReviews && (
+                          <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                            {reviewCount}{" "}
+                            {reviewCount === 1 ? "review" : "reviews"}
+                          </div>
+                        )}
+
+                        <div className="mt-3">
+                          <motion.div
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <Link
+                              href="/login"
+                              className="inline-block w-full text-center px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm rounded-lg hover:shadow-md transition-all font-medium"
+                            >
+                              View Packages
+                            </Link>
+                          </motion.div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -746,10 +844,37 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
             {[
-              { icon: UsersIcon, label: "Happy Customers", value: stats.totalUsers, suffix: "+", color: "from-blue-400 to-blue-500" },
-              { icon: CalendarIcon, label: "Events Hosted", value: stats.totalEvents, suffix: "+", color: "from-green-400 to-green-500" },
-              { icon: BuildingOfficeIcon, label: "Trusted Vendors", value: stats.totalVendors, suffix: "+", color: "from-purple-400 to-purple-500" },
-              { icon: StarIcon, label: "Average Rating", value: stats.avgRating, suffix: "", color: "from-yellow-400 to-yellow-500" },
+              {
+                icon: UsersIcon,
+                label: "Happy Customers",
+                value: stats.totalUsers,
+                suffix: "+",
+                color: "from-blue-400 to-blue-500",
+              },
+              {
+                icon: CalendarIcon,
+                label: "Events Hosted",
+                value: stats.totalEvents,
+                suffix: "+",
+                color: "from-green-400 to-green-500",
+              },
+              {
+                icon: BuildingOfficeIcon,
+                label: "Trusted Vendors",
+                value: stats.totalVendors,
+                suffix: "+",
+                color: "from-purple-400 to-purple-500",
+              },
+              {
+                icon: StarIcon,
+                label: "Avg Rating",
+                value: stats.avgRating > 0 ? stats.avgRating : "N/A",
+                suffix: stats.avgRating > 0 ? " ★" : "",
+                color:
+                  stats.avgRating > 0
+                    ? "from-yellow-400 to-yellow-500"
+                    : "from-gray-400 to-gray-500",
+              },
             ].map((stat, idx) => (
               <motion.div
                 key={idx}
@@ -773,15 +898,18 @@ export default function HomePage() {
                   whileInView={{ scale: 1 }}
                   transition={{ delay: idx * 0.1 + 0.3, type: "spring" }}
                 >
-                  {stat.value}{stat.suffix}
+                  {stat.value}
+                  {stat.suffix}
                 </motion.p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{stat.label}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {stat.label}
+                </p>
               </motion.div>
             ))}
           </div>
         </div>
 
-        {/* Call to Action - Compact & Elegant */}
+        {/* Call to Action */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -791,7 +919,6 @@ export default function HomePage() {
           >
             <div className="px-6 py-8 sm:px-8 sm:py-6">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-                {/* Left side - Text */}
                 <div className="text-center sm:text-left">
                   <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
                     Ready to get started?
@@ -800,10 +927,11 @@ export default function HomePage() {
                     Join EventFlow today — it's free!
                   </p>
                 </div>
-
-                {/* Right side - Buttons */}
                 <div className="flex items-center gap-3">
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
                     <Link
                       href="/signup"
                       className="inline-flex items-center gap-1.5 px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow-sm hover:bg-indigo-700 transition-all"
@@ -812,8 +940,10 @@ export default function HomePage() {
                       <ArrowRightIcon className="h-4 w-4" />
                     </Link>
                   </motion.div>
-
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <motion.div
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
                     <Link
                       href="/login"
                       className="inline-flex items-center gap-1.5 px-5 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-semibold rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
@@ -832,37 +962,102 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">EventFlow</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                  EventFlow
+                </h3>
                 <ul className="mt-4 space-y-2">
-                  <li><Link href="/about" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">About Us</Link></li>
-                  <li><Link href="#" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Contact</Link></li>
+                  <li>
+                    <Link
+                      href="/about"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      About Us
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="#"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      Contact
+                    </Link>
+                  </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">For Organizers</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                  For Organizers
+                </h3>
                 <ul className="mt-4 space-y-2">
-                  <li><Link href="/login" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Create Event</Link></li>
-                  <li><Link href="/login" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Sell Tickets</Link></li>
+                  <li>
+                    <Link
+                      href="/login"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      Create Event
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/login"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      Sell Tickets
+                    </Link>
+                  </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">For Vendors</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                  For Vendors
+                </h3>
                 <ul className="mt-4 space-y-2">
-                  <li><Link href="/signup" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">List Your Services</Link></li>
-                  <li><Link href="/login" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Vendor Dashboard</Link></li>
+                  <li>
+                    <Link
+                      href="/signup"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      List Your Services
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/login"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      Vendor Dashboard
+                    </Link>
+                  </li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">Legal</h3>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wider">
+                  Legal
+                </h3>
                 <ul className="mt-4 space-y-2">
-                  <li><Link href="#" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Terms of Service</Link></li>
-                  <li><Link href="#" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Privacy Policy</Link></li>
+                  <li>
+                    <Link
+                      href="#"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      Terms of Service
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="#"
+                      className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    >
+                      Privacy Policy
+                    </Link>
+                  </li>
                 </ul>
               </div>
             </div>
             <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 text-center">
               <p className="text-sm text-gray-400">
-                © 2026 EventFlow — Nepal's Complete Event Management Solution. All rights reserved.
+                © 2026 EventFlow — Nepal's Complete Event Management Solution.
+                All rights reserved.
               </p>
             </div>
           </div>
@@ -874,11 +1069,17 @@ export default function HomePage() {
           background-size: 200% 200%;
           animation: gradient 3s ease infinite;
         }
-        
+
         @keyframes gradient {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
         }
       `}</style>
     </div>

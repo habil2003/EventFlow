@@ -19,13 +19,14 @@ export async function GET() {
         vendor: true,
         servicePackage: true,
         userSocialEvent: true,
+        payouts: true,  // ✅ ADDED: Include payouts
         refunds: {
           take: 1,
           orderBy: {
             createdAt: "desc",
           },
           include: {
-            paymentTransaction: true, // ✅ Include payment transaction for gateway info
+            paymentTransaction: true,
           },
         },
       },
@@ -35,10 +36,20 @@ export async function GET() {
     });
 
     const formattedBookings = bookings.map((booking) => {
-      // Get the most recent refund record
       const refund = booking.refunds[0];
+      
+      // ✅ Get payout information
+      const payouts = booking.payouts || [];
+      const depositPayout = payouts.find(p => p.type === 'DEPOSIT' && p.status === 'COMPLETED');
+      const remainingPayout = payouts.find(p => p.type === 'REMAINING' && p.status === 'COMPLETED');
+      const pendingPayouts = payouts.filter(p => p.status === 'PENDING');
+      
+      const depositReleased = !!depositPayout;
+      const remainingReleased = !!remainingPayout;
+      const fullyReleased = depositReleased && remainingReleased;
+      const hasPendingPayout = pendingPayouts.length > 0;
 
-      // ✅ Extract detailed refund information from gatewayResponse
+      // ✅ Extract refund details
       let refundMethod = null;
       let refundReference = null;
       let refundProcessedBy = null;
@@ -50,7 +61,6 @@ export async function GET() {
       if (refund?.gatewayResponse) {
         const gatewayResponse = refund.gatewayResponse as any;
         
-        // Determine refund method
         if (gatewayResponse.method === 'KHALTI_API') {
           refundMethod = 'KHALTI_API';
           refundReference = refund.gatewayRefundId;
@@ -82,7 +92,6 @@ export async function GET() {
           refundProcessedAt = gatewayResponse.processedAt || refund.processedAt;
         }
         else if (gatewayResponse.refundResult?.method === 'KHALTI_API') {
-          // Handle vendor decline auto-refund format
           refundMethod = 'KHALTI_API';
           refundReference = refund.gatewayRefundId;
           refundProcessedBy = 'System (Vendor Decline)';
@@ -110,7 +119,22 @@ export async function GET() {
         vendorPaymentStatus: booking.vendorPaymentStatus,
         declineReason: refund?.refundReason,
         
-        // ✅ Enhanced refund fields
+        // ✅ Payout information
+        payouts: payouts.map(p => ({
+          id: p.id,
+          type: p.type,
+          amount: p.amount,
+          status: p.status,
+          processedAt: p.processedAt,
+        })),
+        depositReleased: depositReleased,
+        remainingReleased: remainingReleased,
+        fullyReleased: fullyReleased,
+        hasPendingPayout: hasPendingPayout,
+        depositReleasedAt: depositPayout?.processedAt || null,
+        remainingReleasedAt: remainingPayout?.processedAt || null,
+        
+        // Refund fields
         refundStatus: refund?.refundStatus,
         refundAmount: refund?.refundAmount,
         refundMethod: refundMethod,
@@ -125,9 +149,6 @@ export async function GET() {
         cancelledBy: booking.cancelledBy,
         cancellationReason: booking.cancellationReason,
         cancelledAt: booking.cancelledAt,
-        
-        // Raw gateway response for debugging (optional - remove in production)
-        rawRefundResponse: refund?.gatewayResponse,
       };
     });
 

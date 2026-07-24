@@ -1,4 +1,5 @@
 // app/api/payment/initiate/route.ts
+
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -69,20 +70,46 @@ export async function POST(request: Request) {
 
     console.log('✅ [payment-initiate] Vendor booking found:', vendorBooking.id);
 
-    // Create payment transaction record
-    const transaction = await prisma.paymentTransaction.create({
-      data: {
-        transactionId: generateTransactionId(),
-        amount: amount,
-        amountInPaisa: toPaisa(amount),
-        gateway: gateway.toUpperCase(),
-        paymentType: paymentType,
+    // ✅ CHECK FOR EXISTING TRANSACTION - FIX FOR DUPLICATE ISSUE
+    let transaction = await prisma.paymentTransaction.findFirst({
+      where: {
         vendorBookingId: bookingId,
-        status: 'PENDING'
-      }
+        paymentType: paymentType as any,
+        status: 'PENDING', // Only reuse if still pending
+      },
     });
 
-    console.log('✅ [payment-initiate] Transaction created:', transaction.id);
+    if (transaction) {
+      // ✅ Use existing transaction
+      console.log('✅ [payment-initiate] Using existing transaction:', transaction.id);
+      console.log('📍 [payment-initiate] Existing transaction amount:', transaction.amount);
+      
+      // Update the amount if needed (for consistency)
+      if (Number(transaction.amount) !== amount) {
+        console.log('⚠️ [payment-initiate] Amount mismatch - updating transaction');
+        transaction = await prisma.paymentTransaction.update({
+          where: { id: transaction.id },
+          data: {
+            amount: amount,
+            amountInPaisa: toPaisa(amount),
+          },
+        });
+      }
+    } else {
+      // ✅ Create new transaction only if none exists
+      transaction = await prisma.paymentTransaction.create({
+        data: {
+          transactionId: generateTransactionId(),
+          amount: amount,
+          amountInPaisa: toPaisa(amount),
+          gateway: gateway.toUpperCase(),
+          paymentType: paymentType as any,
+          vendorBookingId: bookingId,
+          status: 'PENDING'
+        }
+      });
+      console.log('✅ [payment-initiate] Created new transaction:', transaction.id);
+    }
 
     // ✅ Store return URL in transaction for later use
     await prisma.paymentTransaction.update({

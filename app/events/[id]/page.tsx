@@ -24,7 +24,12 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
-import { HeartIcon as HeartSolidIcon } from "@heroicons/react/24/solid";
+import { HeartIcon as HeartSolidIcon, StarIcon as StarSolid } from "@heroicons/react/24/solid";
+
+// ✅ ADD: Review component imports
+import ReviewList from "@/components/ReviewList";
+import ReviewForm from "@/components/ReviewForm";
+import RatingStars from "@/components/RatingStars";
 
 interface TicketTier {
   id: string;
@@ -205,6 +210,14 @@ export default function EventDetailPage() {
   const [reservationMessage, setReservationMessage] = useState<string>("");
   const [reservationType, setReservationType] = useState<"success" | "warning" | "">("");
 
+  // ✅ ADD: Review state variables
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [canReviewEvent, setCanReviewEvent] = useState(false);
+  const [hasReviewedEvent, setHasReviewedEvent] = useState(false);
+  const [existingEventReview, setExistingEventReview] = useState<{ id: string; rating: number; review: string | null } | null>(null);
+  const [eventReviewStats, setEventReviewStats] = useState<{ average: number; total: number } | null>(null);
+  const [refreshEventReviews, setRefreshEventReviews] = useState(0);
+
   // Get event ID from params
   useEffect(() => {
     const getId = async () => {
@@ -257,6 +270,51 @@ export default function EventDetailPage() {
     fetchRelated();
   }, [eventId]);
 
+  // ✅ ADD: Check if user can review this event
+  useEffect(() => {
+    if (!session || !eventId) return;
+
+    const checkEventReviewStatus = async () => {
+      try {
+        const response = await fetch(`/api/user/tickets/event/${eventId}/review-status`);
+        if (response.ok) {
+          const data = await response.json();
+          setCanReviewEvent(data.canReview);
+          setHasReviewedEvent(data.hasReviewed);
+          setExistingEventReview(data.existingReview || null);
+        }
+      } catch (error) {
+        console.error("Error checking event review status:", error);
+      }
+    };
+
+    checkEventReviewStatus();
+  }, [session, eventId]);
+
+  // ✅ ADD: Fetch event review stats
+  useEffect(() => {
+    if (!eventId) return;
+
+    const fetchEventReviewStats = async () => {
+      try {
+        const response = await fetch(`/api/events/${eventId}/ratings?page=1&limit=1`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setEventReviewStats({
+              average: data.data.stats.average,
+              total: data.data.stats.total,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching event review stats:", error);
+      }
+    };
+
+    fetchEventReviewStats();
+  }, [eventId, refreshEventReviews]);
+
   // Get all images for gallery
   const getAllImages = () => {
     const images = [];
@@ -307,7 +365,6 @@ export default function EventDetailPage() {
         return;
       }
 
-      // ✅ Show reservation message
       setReservationMessage(orderData.message || "Tickets reserved! Please complete payment.");
       setReservationType("success");
 
@@ -527,7 +584,6 @@ export default function EventDetailPage() {
                   </div>
                 </div>
 
-                {/* ✅ Progress Bar with Real Data */}
                 <div className="flex-shrink-0">
                   <div className="bg-gray-100 dark:bg-gray-700 rounded-lg px-4 py-2 text-center min-w-[120px]">
                     <p className="text-xs text-gray-500 dark:text-gray-400">Tickets Sold</p>
@@ -575,6 +631,65 @@ export default function EventDetailPage() {
                 <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
                   {event.description || "No description available"}
                 </p>
+              </div>
+
+              {/* ✅ ADD: Ratings & Reviews Section */}
+              <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <StarSolid className="h-5 w-5 text-yellow-400" />
+                    Event Reviews
+                  </h2>
+                  {canReviewEvent && !hasReviewedEvent && (
+                    <button
+                      onClick={() => setShowReviewForm(true)}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-lg hover:shadow-md transition-all"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                      Write a Review
+                    </button>
+                  )}
+                  {hasReviewedEvent && (
+                    <button
+                      onClick={() => setShowReviewForm(true)}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                      Edit Review
+                    </button>
+                  )}
+                </div>
+
+                {eventReviewStats && eventReviewStats.total > 0 ? (
+                  <div className="mb-4 flex items-center gap-4">
+                    <RatingStars rating={eventReviewStats.average} size="md" showLabel={true} />
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {eventReviewStats.total} {eventReviewStats.total === 1 ? "review" : "reviews"}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    No reviews yet. Be the first to share your experience!
+                  </p>
+                )}
+
+                <ReviewList
+                  eventId={event.id}
+                  type="EVENT"
+                  limit={3}
+                  showStats={false}
+                />
+
+                {eventReviewStats && eventReviewStats.total > 3 && (
+                  <div className="mt-3 text-center">
+                    <Link
+                      href={`/events/${event.id}/reviews`}
+                      className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      View all {eventReviewStats.total} reviews →
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -644,7 +759,6 @@ export default function EventDetailPage() {
                   exit={{ opacity: 0, height: 0 }}
                   className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700"
                 >
-                  {/* ✅ Reservation Status Message */}
                   {reservationMessage && (
                     <div className={`mb-4 p-3 rounded-lg ${reservationType === 'success' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400' : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-400'}`}>
                       <div className="flex items-center gap-2">
@@ -711,7 +825,6 @@ export default function EventDetailPage() {
                           Purchase Now
                         </>
                       )}
-
                     </button>
                   </div>
                 </motion.div>
@@ -798,6 +911,25 @@ export default function EventDetailPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ✅ ADD: Review Form Modal */}
+      {showReviewForm && (
+        <ReviewForm
+          isOpen={showReviewForm}
+          onClose={() => {
+            setShowReviewForm(false);
+            setRefreshEventReviews(prev => prev + 1);
+          }}
+          onSuccess={() => {
+            setRefreshEventReviews(prev => prev + 1);
+            setHasReviewedEvent(true);
+          }}
+          eventId={event.id}
+          eventTitle={event.title}
+          type="EVENT"
+          existingRating={existingEventReview}
+        />
       )}
     </div>
   );

@@ -1,3 +1,5 @@
+// app/api/user/cancel-booking/route.ts
+
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -15,8 +17,6 @@ function calculateRefundPercentage(eventDate: Date): number {
   return 0;
 }
 
-// For full refunds only: deduct the Khalti fee the platform already paid
-// For partial refunds: platform keeps enough to absorb the fee
 function calculateRefundAmount(
   paidAmount: number,
   khaltiFee: number,
@@ -27,13 +27,11 @@ function calculateRefundAmount(
   }
 
   if (refundPercentage === 100) {
-    // Platform already paid Khalti their fee, so we can only refund what we received
     const refundAmount = Math.max(0, paidAmount - khaltiFee);
-    const platformKeeps = khaltiFee; // Platform keeps only to cover the fee
+    const platformKeeps = khaltiFee;
     return { refundAmount, platformKeeps };
   }
 
-  // Partial refund (50%): straightforward split, fee absorbed by platform's kept portion
   const refundAmount = Math.round((paidAmount * refundPercentage) / 100 * 100) / 100;
   const platformKeeps = paidAmount - refundAmount;
   return { refundAmount, platformKeeps };
@@ -62,12 +60,11 @@ export async function POST(request: Request) {
         where: {
           id: bookingId,
           userId: session.user.id,
-          // ✅ Allow cancellation of both PENDING and ACCEPTED bookings
           bookingStatus: { in: ['PENDING', 'ACCEPTED'] },
         },
         include: {
           paymentTransactions: {
-            where: { status: 'SUCCESS' },
+            where: { status: 'COMPLETED' }, // ✅ FIXED: Use 'COMPLETED' instead of 'SUCCESS'
             orderBy: { createdAt: 'desc' },
           },
           userSocialEvent: true,
@@ -81,7 +78,6 @@ export async function POST(request: Request) {
         );
       }
 
-      // Find the deposit transaction (if any)
       const depositTransaction = booking.paymentTransactions.find(
         (t) => t.paymentType === 'VENDOR_DEPOSIT',
       );
@@ -91,7 +87,6 @@ export async function POST(request: Request) {
         ? Number(depositTransaction!.amount)
         : Number(booking.depositAmount) || Number(booking.totalAmount) * 0.2;
 
-      // Khalti fee stored at transaction time (0 in test env)
       const khaltiFee = hasDeposit
         ? Number(depositTransaction!.khaltiFee)
         : 0;
@@ -107,11 +102,6 @@ export async function POST(request: Request) {
         refundPercentage,
       );
 
-      const daysUntilEvent = Math.ceil(
-        (eventDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
-      );
-
-      // Update booking status
       await prisma.vendorBooking.update({
         where: { id: bookingId },
         data: {
@@ -122,7 +112,7 @@ export async function POST(request: Request) {
           vendorPaymentStatus: hasDeposit
             ? refundAmount > 0
               ? 'REFUNDED'
-              : 'DEPOSIT_PAID' // Kept by platform per policy
+              : 'DEPOSIT_PAID'
             : 'PENDING',
           paymentStatus: hasDeposit
             ? refundAmount > 0
@@ -132,7 +122,6 @@ export async function POST(request: Request) {
         },
       });
 
-      // ✅ Only create refund record if money is actually owed back
       if (hasDeposit && refundAmount > 0) {
         await prisma.refund.create({
           data: {
@@ -141,7 +130,7 @@ export async function POST(request: Request) {
             refundReason:
               reason ||
               `Customer cancelled booking. ${refundPercentage}% refund applied.`,
-            refundStatus: 'PENDING_ADMIN', // ✅ FIXED: was 'PENDING'
+            refundStatus: 'PENDING_ADMIN',
             paymentTransactionId: depositTransaction!.id,
             vendorBookingId: booking.id,
             gatewayResponse: {
@@ -150,7 +139,9 @@ export async function POST(request: Request) {
               khaltiFee,
               refundAmount,
               platformKeeps,
-              daysUntilEvent,
+              daysUntilEvent: Math.ceil(
+                (eventDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+              ),
               cancelledAt: new Date().toISOString(),
               cancelledBy: session.user.email,
               reason: reason || 'No reason provided',
@@ -159,11 +150,9 @@ export async function POST(request: Request) {
         });
       }
 
-      // Build response message
       let message = '';
       if (!hasDeposit) {
-        message =
-          'Booking cancelled successfully. No payment was made, so no refund is due.';
+        message = 'Booking cancelled successfully. No payment was made, so no refund is due.';
       } else if (refundPercentage === 0) {
         message = `Booking cancelled. No refund available — cancellation was less than 3 days before the event.`;
       } else if (refundPercentage === 100) {
@@ -200,7 +189,7 @@ export async function POST(request: Request) {
           event: true,
           tier: true,
           paymentTransactions: {
-            where: { status: 'SUCCESS' },
+            where: { status: 'COMPLETED' }, // ✅ FIXED: Use 'COMPLETED' instead of 'SUCCESS'
             orderBy: { createdAt: 'desc' },
           },
         },
@@ -233,12 +222,6 @@ export async function POST(request: Request) {
         refundPercentage,
       );
 
-      const daysUntilEvent = Math.ceil(
-        (ticket.event.eventDate.getTime() - new Date().getTime()) /
-          (1000 * 60 * 60 * 24),
-      );
-
-      // Update ticket status
       await prisma.ticketBooking.update({
         where: { id: bookingId },
         data: {
@@ -246,23 +229,20 @@ export async function POST(request: Request) {
         },
       });
 
-      // Restore ticket tier inventory
       await prisma.ticketTier.update({
         where: { id: ticket.tierId },
         data: { soldCount: { decrement: ticket.quantity } },
       });
 
-      // ✅ Only create refund record if money is actually owed back
       if (refundAmount > 0 && ticketTransaction) {
         await prisma.refund.create({
           data: {
-            originalTransactionId:
-              ticketTransaction.transactionId,
+            originalTransactionId: ticketTransaction.transactionId,
             refundAmount: refundAmount,
             refundReason:
               reason ||
               `Customer cancelled ticket. ${refundPercentage}% refund applied.`,
-            refundStatus: 'PENDING_ADMIN', // ✅ FIXED: was 'PENDING'
+            refundStatus: 'PENDING_ADMIN',
             paymentTransactionId: ticketTransaction.id,
             ticketBookingId: ticket.id,
             gatewayResponse: {
@@ -271,7 +251,10 @@ export async function POST(request: Request) {
               khaltiFee,
               refundAmount,
               platformKeeps,
-              daysUntilEvent,
+              daysUntilEvent: Math.ceil(
+                (ticket.event.eventDate.getTime() - new Date().getTime()) /
+                  (1000 * 60 * 60 * 24),
+              ),
               cancelledAt: new Date().toISOString(),
               cancelledBy: session.user.email,
               reason: reason || 'No reason provided',
@@ -280,7 +263,6 @@ export async function POST(request: Request) {
         });
       }
 
-      // Build response message
       let message = '';
       if (refundPercentage === 0) {
         message = `Ticket cancelled. No refund available — cancellation was less than 3 days before the event.`;

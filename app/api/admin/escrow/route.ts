@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { RefundStatus } from '@prisma/client';
 
 // ✅ Helper function to get platform commission rate
 async function getPlatformCommissionRate(): Promise<number> {
@@ -18,7 +19,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get vendor bookings
+    // ─── GET VENDOR BOOKINGS ──────────────────────────────────────
     const vendorBookings = await prisma.vendorBooking.findMany({
       where: {
         bookingStatus: { notIn: ['DECLINED'] },
@@ -29,7 +30,13 @@ export async function GET() {
         NOT: {
           refunds: {
             some: {
-              refundStatus: { in: ['PROCESSED', 'PENDING_ADMIN', 'PENDING'] }
+              refundStatus: {
+                // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
+                in: [
+                  RefundStatus.PROCESSED,
+                  RefundStatus.PENDING_ADMIN
+                ]
+              }
             }
           }
         }
@@ -47,7 +54,7 @@ export async function GET() {
       },
     });
 
-    // ✅ Get ticket bookings - include PROCESSING_PAYOUT even if escrowReleased is true
+    // ─── GET TICKET BOOKINGS ──────────────────────────────────────
     const ticketBookings = await prisma.ticketBooking.findMany({
       where: {
         paymentStatus: {
@@ -63,7 +70,13 @@ export async function GET() {
         NOT: {
           refunds: {
             some: {
-              refundStatus: { in: ['PROCESSED', 'PENDING_ADMIN', 'PENDING'] }
+              refundStatus: {
+                // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
+                in: [
+                  RefundStatus.PROCESSED,
+                  RefundStatus.PENDING_ADMIN
+                ]
+              }
             }
           }
         }
@@ -96,7 +109,7 @@ export async function GET() {
       },
     });
 
-    // Format vendor bookings
+    // ─── FORMAT VENDOR BOOKINGS ───────────────────────────────────
     const formattedVendorBookings = vendorBookings.map((booking) => {
       const totalAmount = Number(booking.totalAmount);
       const depositAmount = booking.depositAmount ? Number(booking.depositAmount) : totalAmount * 0.2;
@@ -116,7 +129,8 @@ export async function GET() {
       const vendorDeclined = booking.bookingStatus === 'DECLINED';
       
       const hasActiveRefund = booking.refunds.some(
-        r => ['PROCESSED', 'PENDING_ADMIN', 'PENDING'].includes(r.refundStatus)
+        // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
+        r => [RefundStatus.PROCESSED, RefundStatus.PENDING_ADMIN].includes(r.refundStatus as RefundStatus)
       );
       
       let availableActions = [];
@@ -177,7 +191,7 @@ export async function GET() {
       };
     });
 
-    // Format ticket bookings with enhanced grouping data
+    // ─── FORMAT TICKET BOOKINGS ───────────────────────────────────
     const formattedTicketBookings = ticketBookings.map((booking) => {
       const totalAmount = Number(booking.totalAmount);
       const commissionRate = 0.1;
@@ -185,7 +199,8 @@ export async function GET() {
       const organizerPayout = totalAmount - platformCommission;
       
       const hasActiveRefund = booking.refunds.some(
-        r => ['PROCESSED', 'PENDING_ADMIN', 'PENDING'].includes(r.refundStatus)
+        // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
+        r => [RefundStatus.PROCESSED, RefundStatus.PENDING_ADMIN].includes(r.refundStatus as RefundStatus)
       );
 
       const pendingPayouts = booking.payouts.filter(p => p.status === 'PENDING');
@@ -238,7 +253,7 @@ export async function GET() {
       };
     });
 
-    // ✅ FIXED: Event groups - separate display totals from bulk release totals
+    // ─── GROUP TICKET BOOKINGS BY EVENT ───────────────────────────
     const ticketBookingsByEvent = formattedTicketBookings.reduce((groups, booking) => {
       const key = booking.eventId || booking.eventTitle;
       if (!groups[key]) {
@@ -250,12 +265,10 @@ export async function GET() {
           organizerName: booking.organizerName,
           organizerId: booking.organizerId,
           bookings: [],
-          // ✅ Display counts and totals - include ALL tickets
           displayCount: 0,
           totalAmount: 0,
           totalCommission: 0,
           organizerPayout: 0,
-          // ✅ Bulk release counts and totals - only HELD_IN_ESCROW
           bulkReleaseCount: 0,
           bulkTotalAmount: 0,
           bulkTotalCommission: 0,
@@ -266,20 +279,16 @@ export async function GET() {
         };
       }
       
-      // ✅ Always add booking and increment display count
       groups[key].bookings.push(booking);
       groups[key].displayCount += 1;
       
-      // ✅ Include ALL tickets in display totals (for summary bar)
       groups[key].totalAmount += booking.totalAmount || 0;
       groups[key].totalCommission += booking.platformCommission || 0;
       groups[key].organizerPayout += booking.organizerPayout || 0;
       
-      // ✅ Track status counts
       if (booking.paymentStatus === 'HELD_IN_ESCROW' && booking.canRelease) {
         groups[key].bulkReleaseCount += 1;
         groups[key].bookingIds.push(booking.id);
-        // ✅ Only include in bulk totals if in HELD_IN_ESCROW
         groups[key].bulkTotalAmount += booking.totalAmount || 0;
         groups[key].bulkTotalCommission += booking.platformCommission || 0;
         groups[key].bulkOrganizerPayout += booking.organizerPayout || 0;
@@ -289,7 +298,6 @@ export async function GET() {
         groups[key].processingCount += 1;
       }
       
-      // ✅ canBulkReleaseAll only if there are HELD_IN_ESCROW tickets
       groups[key].canBulkReleaseAll = groups[key].bulkReleaseCount > 0;
       
       return groups;
@@ -297,7 +305,7 @@ export async function GET() {
 
     const eventGroups = Object.values(ticketBookingsByEvent);
 
-    // Calculate summary statistics
+    // ─── SUMMARY STATISTICS ────────────────────────────────────────
     const totalEscrowAmount = [...formattedVendorBookings, ...formattedTicketBookings].reduce((sum, b) => {
       if (b.type === 'VENDOR') {
         if (b.hasDepositPayout && !b.hasRemainingPayout) {
@@ -314,6 +322,7 @@ export async function GET() {
       b => b.paymentStatus === 'PROCESSING_PAYOUT'
     );
 
+    // ─── RESPONSE ──────────────────────────────────────────────────
     return NextResponse.json({ 
       bookings: [...formattedVendorBookings, ...formattedTicketBookings],
       vendorCount: formattedVendorBookings.length,

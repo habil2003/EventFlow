@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import ReviewForm from "@/components/ReviewForm";
+
 import {
   TicketIcon,
   CalendarIcon,
@@ -16,6 +18,7 @@ import {
   ArrowRightIcon,
   ClipboardDocumentIcon,
   ShoppingCartIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
 
 interface Ticket {
@@ -35,6 +38,7 @@ interface Ticket {
   paymentStatus: string;
   refundStatus?: string | null;
   refundAmount?: number | null;
+  hasReviewed?: boolean;
 }
 
 function MyTicketsContent() {
@@ -47,6 +51,15 @@ function MyTicketsContent() {
   const [loading, setLoading] = useState(true);
   const [copiedTicket, setCopiedTicket] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [selectedEventForReview, setSelectedEventForReview] = useState<{
+    id: string;
+    eventId: string;
+    eventTitle: string;
+    ticketId: string;
+  } | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const paymentSuccess = searchParams.get("payment");
 
@@ -84,23 +97,23 @@ function MyTicketsContent() {
   const handleCancelTicket = async (ticket: Ticket) => {
     const daysUntil = Math.ceil(
       (new Date(ticket.eventDate).getTime() - Date.now()) /
-        (1000 * 60 * 60 * 24)
+        (1000 * 60 * 60 * 24),
     );
     const policyText =
       daysUntil >= 7
         ? "100% refund (7+ days notice)"
         : daysUntil >= 3
-        ? "50% refund (3–6 days notice)"
-        : "No refund (less than 3 days notice)";
+          ? "50% refund (3–6 days notice)"
+          : "No refund (less than 3 days notice)";
 
     const reason = prompt(
-      `Cancel this ticket?\n\nRefund policy: ${policyText}\n\nReason for cancellation (optional):`
+      `Cancel this ticket?\n\nRefund policy: ${policyText}\n\nReason for cancellation (optional):`,
     );
     if (reason === null) return;
 
     if (
       !confirm(
-        `Are you sure you want to cancel "${ticket.eventTitle}"?\n\nPolicy: ${policyText}\n\nThis cannot be undone.`
+        `Are you sure you want to cancel "${ticket.eventTitle}"?\n\nPolicy: ${policyText}\n\nThis cannot be undone.`,
       )
     )
       return;
@@ -166,20 +179,29 @@ function MyTicketsContent() {
     (t) =>
       !t.checkedIn &&
       t.paymentStatus !== "REFUNDED" &&
-      new Date(t.eventDate) >= new Date()
+      new Date(t.eventDate) >= new Date(),
   );
 
   const pastTickets = tickets.filter(
     (t) =>
       t.checkedIn ||
-      (new Date(t.eventDate) < new Date() && t.paymentStatus !== "REFUNDED")
+      (new Date(t.eventDate) < new Date() && t.paymentStatus !== "REFUNDED"),
   );
 
   const cancelledTickets = tickets.filter(
-    (t) => t.paymentStatus === "REFUNDED"
+    (t) => t.paymentStatus === "REFUNDED",
   );
 
-  const getStatusBadge = (checkedIn: boolean) => {
+  const getStatusBadge = (checkedIn: boolean, paymentStatus?: string) => {
+    // ✅ If payment is refunded, show cancelled
+    if (paymentStatus === "REFUNDED") {
+      return {
+        text: "Cancelled",
+        icon: XCircleIcon,
+        color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+      };
+    }
+
     if (checkedIn) {
       return {
         text: "Checked In",
@@ -188,6 +210,8 @@ function MyTicketsContent() {
           "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
       };
     }
+
+    // ✅ If event date has passed but not checked in
     return {
       text: "Not Checked In",
       icon: XCircleIcon,
@@ -201,27 +225,32 @@ function MyTicketsContent() {
       case "COMPLETED":
         return {
           text: "Paid",
-          color: "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
+          color:
+            "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400",
         };
       case "HELD_IN_ESCROW":
         return {
           text: "Confirmed (Escrow)",
-          color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+          color:
+            "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
         };
       case "PENDING":
         return {
           text: "Payment Pending",
-          color: "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
+          color:
+            "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400",
         };
       case "REFUNDED":
         return {
           text: "Refunded",
-          color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+          color:
+            "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
         };
       default:
         return {
           text: status || "Unknown",
-          color: "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
+          color:
+            "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400",
         };
     }
   };
@@ -229,7 +258,6 @@ function MyTicketsContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
       <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-
         {/* Header */}
         <motion.div
           initial="hidden"
@@ -315,7 +343,9 @@ function MyTicketsContent() {
               {upcomingTickets.map((ticket) => {
                 const statusBadge = getStatusBadge(ticket.checkedIn);
                 const StatusIcon = statusBadge.icon;
-                const paymentBadge = getPaymentStatusBadge(ticket.paymentStatus);
+                const paymentBadge = getPaymentStatusBadge(
+                  ticket.paymentStatus,
+                );
                 const isCancelling = cancellingId === ticket.id;
 
                 return (
@@ -425,7 +455,8 @@ function MyTicketsContent() {
                           </Link>
 
                           {/* ✅ Cancel button - only for PENDING or HELD_IN_ESCROW */}
-                          {(ticket.paymentStatus === "PENDING" || ticket.paymentStatus === "HELD_IN_ESCROW") && (
+                          {(ticket.paymentStatus === "PENDING" ||
+                            ticket.paymentStatus === "HELD_IN_ESCROW") && (
                             <button
                               onClick={() => handleCancelTicket(ticket)}
                               disabled={isCancelling}
@@ -462,23 +493,33 @@ function MyTicketsContent() {
             </h2>
             <div className="space-y-4">
               {pastTickets.map((ticket) => {
-                const statusBadge = getStatusBadge(ticket.checkedIn);
+                const statusBadge = getStatusBadge(
+                  ticket.checkedIn,
+                  ticket.paymentStatus,
+                );
                 const StatusIcon = statusBadge.icon;
-                const paymentBadge = getPaymentStatusBadge(ticket.paymentStatus);
+                const paymentBadge = getPaymentStatusBadge(
+                  ticket.paymentStatus,
+                );
+
+                // ✅ Check if user can review this event
+                const canReview =
+                  ticket.paymentStatus !== "REFUNDED" &&
+                  ticket.checkedIn === true &&
+                  new Date(ticket.eventDate) < new Date() &&
+                  !ticket.hasReviewed;
+
                 return (
                   <div
                     key={ticket.id}
                     className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 opacity-75"
                   >
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {ticket.eventTitle}
-                        </h3>
-                        <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                          <span>
-                            {new Date(ticket.eventDate).toLocaleDateString()}
-                          </span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {ticket.eventTitle}
+                          </h3>
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge.color}`}
                           >
@@ -491,6 +532,11 @@ function MyTicketsContent() {
                             {paymentBadge.text}
                           </span>
                         </div>
+                        <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500 dark:text-gray-400">
+                          <span>
+                            {new Date(ticket.eventDate).toLocaleDateString()}
+                          </span>
+                        </div>
                         <div className="mt-2">
                           <span className="text-xs text-gray-400">
                             Ticket Number:
@@ -500,12 +546,42 @@ function MyTicketsContent() {
                           </span>
                         </div>
                       </div>
-                      <Link
-                        href={`/tickets/${ticket.id}`}
-                        className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline"
-                      >
-                        View Details →
-                      </Link>
+
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* ✅ ADD: Review Event Button */}
+                        {canReview && (
+                          <button
+                            onClick={() => {
+                              setSelectedEventForReview({
+                                id: ticket.id,
+                                eventId: ticket.eventId,
+                                eventTitle: ticket.eventTitle,
+                                ticketId: ticket.id,
+                              });
+                              setShowReviewForm(true);
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-medium rounded-lg hover:shadow-md transition-all"
+                          >
+                            <PencilIcon className="h-3 w-3" />
+                            Review Event
+                          </button>
+                        )}
+
+                        {/* ✅ Show if already reviewed */}
+                        {ticket.hasReviewed && (
+                          <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                            <CheckCircleIcon className="h-3 w-3" />
+                            Reviewed ✓
+                          </span>
+                        )}
+
+                        <Link
+                          href={`/tickets/${ticket.id}`}
+                          className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline"
+                        >
+                          View Details →
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 );
@@ -607,6 +683,33 @@ function MyTicketsContent() {
           </div>
         )}
       </main>
+
+      {/* ✅ ADD: Review Form Modal */}
+      {showReviewForm && selectedEventForReview && (
+        <ReviewForm
+          isOpen={showReviewForm}
+          onClose={() => {
+            setShowReviewForm(false);
+            setSelectedEventForReview(null);
+          }}
+          onSuccess={() => {
+            setShowReviewForm(false);
+            setSelectedEventForReview(null);
+            setRefreshTrigger((prev) => prev + 1);
+            // Reload tickets to update review status
+            const fetchTickets = async () => {
+              const response = await fetch("/api/user/tickets");
+              const data = await response.json();
+              setTickets(data);
+            };
+            fetchTickets();
+          }}
+          eventId={selectedEventForReview.eventId}
+          eventTitle={selectedEventForReview.eventTitle}
+          bookingId={selectedEventForReview.id}
+          type="EVENT"
+        />
+      )}
     </div>
   );
 }

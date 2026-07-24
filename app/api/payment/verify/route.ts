@@ -1,4 +1,5 @@
 // app/api/payment/verify/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-url';
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
 
     console.log('📍 [payment-verify] Original return URL:', originalReturnUrl);
 
-    // ✅ FIX: Build proper redirect URLs using existing pages
+    // ✅ Build proper redirect URLs using existing pages
     let successRedirectUrl = `${appUrl}/payment/success`;
     let failedRedirectUrl = `${appUrl}/payment/failed`;
 
@@ -103,8 +104,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ✅ Check if already processed
-    if (transaction.status === 'SUCCESS') {
+    // ✅ Check if already processed - FIXED: Use 'COMPLETED' instead of 'SUCCESS'
+    if (transaction.status === 'COMPLETED') {
       console.log('✅ [payment-verify] Transaction already processed:', transactionId);
       return NextResponse.redirect(
         `${successRedirectUrl}&payment=already_processed`
@@ -117,11 +118,11 @@ export async function GET(request: NextRequest) {
       const paidAmount = Number(transaction.amount);
       const khaltiFee = calculateKhaltiFee(paidAmount);
 
-      // ✅ Update payment transaction
+      // ✅ Update payment transaction - FIXED: Use 'COMPLETED' instead of 'SUCCESS'
       await prisma.paymentTransaction.update({
         where: { id: transaction.id },
         data: {
-          status: 'SUCCESS',
+          status: 'COMPLETED', // ✅ Changed from 'SUCCESS' to 'COMPLETED'
           gatewayTransactionId: gatewayTransactionId,
           khaltiFee: khaltiFee,
           gatewayResponse: { 

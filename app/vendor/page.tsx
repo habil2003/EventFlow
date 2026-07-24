@@ -17,8 +17,35 @@ import {
   CheckCircleIcon,
   BuildingOfficeIcon,
   TrashIcon,
-  PhotoIcon
+  PhotoIcon,
+  MapPinIcon
 } from "@heroicons/react/24/outline";
+
+// ✅ Helper: Get emoji icon for service type
+const getServiceTypeIcon = (type: string) => {
+  const icons: Record<string, string> = {
+    venue: '🏛️',
+    catering: '🍽️',
+    photography: '📸',
+    decoration: '🎨',
+    makeup: '💄',
+    dj: '🎧',
+  };
+  return icons[type] || '🏪';
+};
+
+// ✅ Helper: Format service type for display
+const formatServiceType = (type: string) => {
+  const labels: Record<string, string> = {
+    venue: 'Venue',
+    catering: 'Catering',
+    photography: 'Photography',
+    decoration: 'Decoration',
+    makeup: 'Makeup Artist',
+    dj: 'DJ / Music',
+  };
+  return labels[type] || type;
+};
 
 export default function VendorDashboard() {
   const { data: session, status } = useSession();
@@ -192,12 +219,12 @@ export default function VendorDashboard() {
           </p>
         </motion.div>
 
-        {/* Business Profile Section with Custom Image Upload */}
+        {/* ✅ Business Profile Section with Service Type Display */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-8">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Business Profile</h2>
           
           <div className="flex flex-col md:flex-row gap-6 items-start">
-            {/* Profile Image Display */}
+            {/* Profile Image */}
             <div className="relative">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex-shrink-0 border-2 border-indigo-200 dark:border-indigo-800">
                 {profileImage ? (
@@ -226,12 +253,39 @@ export default function VendorDashboard() {
             </div>
             
             <div className="flex-1">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Your business logo will appear in the marketplace
+              {/* ✅ ADD: Business Name */}
+              <p className="text-xl font-bold text-gray-900 dark:text-white">
+                {vendorProfile?.businessName || "Business Name"}
+              </p>
+              
+              {/* ✅ ADD: Service Type Badge */}
+              {vendorProfile?.serviceType && (
+                <div className="mt-1 inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-3 py-1 text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                  {getServiceTypeIcon(vendorProfile.serviceType)} {formatServiceType(vendorProfile.serviceType)}
+                </div>
+              )}
+              
+              {/* ✅ ADD: Location */}
+              {vendorProfile?.location && (
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <MapPinIcon className="h-4 w-4" />
+                  {vendorProfile.location}
+                </p>
+              )}
+              
+              {/* ✅ ADD: Description */}
+              {vendorProfile?.description && (
+                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                  {vendorProfile.description}
+                </p>
+              )}
+              
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
+                Your business details will appear in the marketplace
               </p>
               
               {/* Custom upload button */}
-              <div className="space-y-3">
+              <div className="space-y-3 mt-3">
                 <label className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium rounded-lg cursor-pointer hover:shadow-md transition-all">
                   <PhotoIcon className="h-4 w-4" />
                   {profileImage ? "Change Logo" : "Upload Logo"}
@@ -310,7 +364,15 @@ export default function VendorDashboard() {
           variants={staggerContainer}
           className="mb-8"
         >
-          <h2 className="mb-4 text-lg font-bold text-gray-800 dark:text-gray-200">Quick Actions</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">Quick Actions</h2>
+            {/* ✅ ADD: Service Type Badge in header */}
+            {vendorProfile?.serviceType && (
+              <span className="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/50 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                {getServiceTypeIcon(vendorProfile.serviceType)} {formatServiceType(vendorProfile.serviceType)}
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {navItems.map((item, idx) => (
               <motion.div

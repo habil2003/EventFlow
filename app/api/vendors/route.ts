@@ -33,19 +33,37 @@ export async function GET(request: Request) {
             email: true,
           },
         },
+        // ✅ ADD: Include ratings
+        ratings: {
+          select: {
+            rating: true,
+          },
+        },
       },
       take: limit ? parseInt(limit) : undefined,
     });
 
-    const formattedVendors = vendors.map((vendor) => ({
-      id: vendor.id,
-      businessName: vendor.businessName,
-      serviceType: vendor.serviceType,
-      location: vendor.location,
-      description: vendor.description,
-      imageUrl: vendor.imageUrl,  // Now this exists in the schema
-      packages: vendor.servicePackages,
-    }));
+    const formattedVendors = vendors.map((vendor) => {
+      // ✅ Calculate average rating
+      const ratings = vendor.ratings || [];
+      const totalRatings = ratings.length;
+      const averageRating = totalRatings > 0
+        ? ratings.reduce((sum, r) => sum + r.rating, 0) / totalRatings
+        : null;
+
+      return {
+        id: vendor.id,
+        businessName: vendor.businessName,
+        serviceType: vendor.serviceType,
+        location: vendor.location,
+        description: vendor.description,
+        imageUrl: vendor.imageUrl,
+        packages: vendor.servicePackages,
+        // ✅ ADD: Rating fields
+        rating: averageRating,
+        reviewCount: totalRatings,
+      };
+    });
 
     return NextResponse.json(formattedVendors);
   } catch (error) {

@@ -62,7 +62,6 @@ export async function POST(request: Request) {
     // Find all pending payouts - either by bookingIds or payoutIds
     let payouts;
     if (payoutIds && payoutIds.length > 0) {
-      // Use payoutIds directly if provided
       payouts = await prisma.payout.findMany({
         where: {
           id: { in: payoutIds },
@@ -75,7 +74,6 @@ export async function POST(request: Request) {
         },
       });
     } else {
-      // Fallback to bookingIds
       payouts = await prisma.payout.findMany({
         where: {
           ticketBookingId: { in: bookingIds },
@@ -100,10 +98,18 @@ export async function POST(request: Request) {
     // Track parent payout IDs for bulk update
     const parentPayoutIds = new Set<string>();
     for (const payout of payouts) {
+      // ✅ Check both parentPayout relation and bulkPayoutId
       if (payout.parentPayout) {
         parentPayoutIds.add(payout.parentPayout.id);
       }
+      // Also check if bulkPayoutId is set directly
+      const payoutWithBulk = payout as any;
+      if (payoutWithBulk.bulkPayoutId) {
+        parentPayoutIds.add(payoutWithBulk.bulkPayoutId);
+      }
     }
+
+    console.log('Parent payout IDs to update:', [...parentPayoutIds]);
 
     const results = [];
     const errors = [];
@@ -111,7 +117,6 @@ export async function POST(request: Request) {
     // Process each payout
     for (const payout of payouts) {
       try {
-        // ✅ Update payout as COMPLETED with proof image in notes
         const updatedPayout = await prisma.payout.update({
           where: { id: payout.id },
           data: {
@@ -151,20 +156,31 @@ ${notes ? `Admin notes: ${notes}` : ''}`,
       }
     }
 
-    // Update parent bulk payouts if all child payouts are completed
+    // ✅ Update parent bulk payouts if all child payouts are completed
     for (const parentId of parentPayoutIds) {
       try {
-        const allChildren = await prisma.payout.findMany({
-          where: {
-            bulkPayoutId: parentId,
+        // Find the parent payout
+        const parentPayout = await prisma.payout.findUnique({
+          where: { id: parentId },
+          include: {
+            childPayouts: {
+              select: { status: true, id: true },
+            },
           },
-          select: { status: true },
         });
 
-        const allCompleted = allChildren.every(p => p.status === 'COMPLETED');
+        if (!parentPayout) {
+          console.warn(`Parent payout ${parentId} not found`);
+          continue;
+        }
 
-        if (allCompleted) {
-          // ✅ Also update parent bulk payout with proof image
+        // Check if all children are completed
+        const allChildrenCompleted = parentPayout.childPayouts.every(
+          p => p.status === 'COMPLETED'
+        );
+
+        if (allChildrenCompleted && parentPayout.childPayouts.length > 0) {
+          // ✅ Update parent bulk payout
           await prisma.payout.update({
             where: { id: parentId },
             data: {
@@ -172,12 +188,15 @@ ${notes ? `Admin notes: ${notes}` : ''}`,
               khaltiPayoutId: transactionReference,
               processedAt: new Date(),
               adminId: session.user.id,
-              notes: `[BULK VERIFICATION] All ${allChildren.length} child payouts verified. 
+              notes: `[BULK VERIFICATION] All ${parentPayout.childPayouts.length} child payouts verified. 
 Transaction Reference: ${transactionReference}. 
 Proof: ${proofImageUrl}
 Verified by: ${session.user.email} (${session.user.name || 'Admin'})`,
             },
           });
+          console.log(`✅ Updated parent payout ${parentId} to COMPLETED`);
+        } else {
+          console.log(`⏳ Parent payout ${parentId}: ${parentPayout.childPayouts.filter(p => p.status === 'COMPLETED').length}/${parentPayout.childPayouts.length} completed`);
         }
       } catch (error: any) {
         console.error(`Error updating parent payout ${parentId}:`, error);
