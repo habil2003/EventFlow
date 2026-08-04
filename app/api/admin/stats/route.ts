@@ -55,7 +55,7 @@ export async function GET() {
       prisma.payout.aggregate({
         where: {
           status: 'COMPLETED',
-          type: { in: ['DEPOSIT', 'REMAINING'] },
+          type: { in: ['DEPOSIT', 'REMAINING', 'FULL'] },
         },
         _sum: { vendorPayout: true, platformCommission: true },
       }),

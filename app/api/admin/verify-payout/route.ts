@@ -105,26 +105,38 @@ ${notes ? `Admin notes: ${notes}` : ''}`,
       },
     });
 
-    // Update the associated booking status based on payout type
+    // ─── UPDATE BOOKING STATUS BASED ON PAYOUT TYPE ──────────────
     if (payout.bookingId && payout.vendorBooking) {
       const allPayouts = payout.vendorBooking.payouts;
       const completedPayouts = allPayouts.filter(p => p.status === 'COMPLETED' || (p.id === payoutId && updatedPayout.status === 'COMPLETED'));
       
       const hasDepositCompleted = completedPayouts.some(p => p.type === 'DEPOSIT');
       const hasRemainingCompleted = completedPayouts.some(p => p.type === 'REMAINING');
+      const hasFullCompleted = completedPayouts.some(p => p.type === 'FULL');
       
-      // Get the vendor booking to check if remaining amount is zero
       const vendorBooking = await prisma.vendorBooking.findUnique({
         where: { id: payout.bookingId },
         select: { remainingAmount: true }
       });
       
-      // ✅ FIX: Properly check if remainingAmount is zero
       const isRemainingZero = vendorBooking?.remainingAmount !== null && 
                               vendorBooking?.remainingAmount !== undefined && 
                               Number(vendorBooking.remainingAmount) === 0;
+
+      // ─── CASE 1: FULL payout ─────────────────────────────────────
+      if (payout.type === 'FULL') {
+        // Full payout completed → Booking is fully done
+        await prisma.vendorBooking.update({
+          where: { id: payout.bookingId },
+          data: {
+            paymentStatus: 'COMPLETED',
+            vendorPaymentStatus: 'COMPLETED',
+          },
+        });
+      }
       
-      if (payout.type === 'REMAINING' || (payout.type === 'DEPOSIT' && isRemainingZero)) {
+      // ─── CASE 2: REMAINING payout ───────────────────────────────
+      else if (payout.type === 'REMAINING' || (payout.type === 'DEPOSIT' && isRemainingZero)) {
         // Fully paid and fully released
         await prisma.vendorBooking.update({
           where: { id: payout.bookingId },
@@ -133,12 +145,15 @@ ${notes ? `Admin notes: ${notes}` : ''}`,
             vendorPaymentStatus: 'COMPLETED',
           },
         });
-      } else if (payout.type === 'DEPOSIT' && hasDepositCompleted && !hasRemainingCompleted) {
+      } 
+      
+      // ─── CASE 3: DEPOSIT payout ──────────────────────────────────
+      else if (payout.type === 'DEPOSIT' && hasDepositCompleted && !hasRemainingCompleted) {
         // Only deposit released, waiting for remaining payment from customer
         await prisma.vendorBooking.update({
           where: { id: payout.bookingId },
           data: {
-            paymentStatus: 'HELD_IN_ESCROW',  // Back to escrow, waiting for remaining
+            paymentStatus: 'HELD_IN_ESCROW',
             vendorPaymentStatus: 'DEPOSIT_PAID',
           },
         });
@@ -147,7 +162,6 @@ ${notes ? `Admin notes: ${notes}` : ''}`,
 
     // Handle ticket booking payouts
     if (payout.ticketBookingId) {
-      // Check if all payouts for this ticket are completed
       const allTicketPayouts = await prisma.payout.findMany({
         where: { ticketBookingId: payout.ticketBookingId }
       });

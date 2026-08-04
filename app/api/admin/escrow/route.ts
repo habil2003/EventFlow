@@ -31,7 +31,6 @@ export async function GET() {
           refunds: {
             some: {
               refundStatus: {
-                // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
                 in: [
                   RefundStatus.PROCESSED,
                   RefundStatus.PENDING_ADMIN
@@ -71,7 +70,6 @@ export async function GET() {
           refunds: {
             some: {
               refundStatus: {
-                // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
                 in: [
                   RefundStatus.PROCESSED,
                   RefundStatus.PENDING_ADMIN
@@ -121,25 +119,86 @@ export async function GET() {
       const pendingPayouts = booking.payouts.filter(p => p.status === 'PENDING');
       const hasPendingPayout = pendingPayouts.length > 0;
       
-      const customerPaidDeposit = !!booking.depositPaidAt;
-      const customerPaidFull = booking.vendorPaymentStatus === 'FULLY_PAID' || !!booking.remainingPaidAt;
+      const customerPaidDeposit = booking.vendorPaymentStatus === 'DEPOSIT_PAID' || 
+                                 (booking.vendorPaymentStatus === 'FULLY_PAID' && !!booking.depositPaidAt);
+      const customerPaidFull = booking.vendorPaymentStatus === 'FULLY_PAID' && !!booking.remainingPaidAt;
       
       const vendorAccepted = booking.bookingStatus === 'ACCEPTED';
       const vendorPending = booking.bookingStatus === 'PENDING';
       const vendorDeclined = booking.bookingStatus === 'DECLINED';
       
       const hasActiveRefund = booking.refunds.some(
-        // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
         r => [RefundStatus.PROCESSED, RefundStatus.PENDING_ADMIN].includes(r.refundStatus as RefundStatus)
       );
       
+      // ─── DISPLAY AMOUNTS FOR TABLE ────────────────────────────────────
+      let displayAmount = 0;
+      let displayCommission = 0;
+      let displayPayout = 0;
+
+      // ✅ FIXED: For PROCESSING_PAYOUT, check the payout type
+      if (booking.paymentStatus === 'PROCESSING_PAYOUT') {
+        const payout = booking.payouts.find(p => p.status === 'PENDING');
+        if (payout) {
+          if (payout.type === 'FULL') {
+            displayAmount = totalAmount;
+            displayCommission = totalAmount * 0.1;
+            displayPayout = totalAmount * 0.9;
+          } else if (payout.type === 'REMAINING') {
+            displayAmount = remainingAmount;
+            displayCommission = remainingAmount * 0.1;
+            displayPayout = remainingAmount * 0.9;
+          } else if (payout.type === 'DEPOSIT') {
+            displayAmount = depositAmount;
+            displayCommission = depositAmount * 0.1;
+            displayPayout = depositAmount * 0.9;
+          }
+        }
+      } else if (booking.vendorPaymentStatus === 'FULLY_PAID') {
+        // FULLY_PAID but still in HELD_IN_ESCROW → show remaining
+        displayAmount = remainingAmount;
+        displayCommission = remainingAmount * 0.1;
+        displayPayout = remainingAmount * 0.9;
+      } else {
+        // DEPOSIT_PAID → show deposit
+        displayAmount = depositAmount;
+        displayCommission = depositAmount * 0.1;
+        displayPayout = depositAmount * 0.9;
+      }
+      
+      // ─── AVAILABLE ACTIONS ──────────────────────────────────────
       let availableActions = [];
       
       if (booking.paymentStatus === 'HELD_IN_ESCROW' && !hasActiveRefund) {
-        if (customerPaidDeposit && !hasDepositPayout && !hasRemainingPayout && vendorAccepted) {
+        
+        // ─── SCENARIO 1: DEPOSIT_PAID ────────────────────────────────
+        // Show "Release Deposit" only
+        if (booking.vendorPaymentStatus === 'DEPOSIT_PAID' && 
+            customerPaidDeposit && 
+            !hasDepositPayout && 
+            vendorAccepted) {
           availableActions.push('RELEASE_DEPOSIT');
         }
-        if (customerPaidFull && !hasRemainingPayout) {
+        
+        // ─── SCENARIO 2: FULLY_PAID + NO RELEASES ────────────────────
+        // Show "Release Full" (both deposit + remaining)
+        else if (booking.vendorPaymentStatus === 'FULLY_PAID' && 
+                 customerPaidFull &&
+                 !hasDepositPayout && 
+                 !hasRemainingPayout &&
+                 booking.vendorMarkedComplete === true &&
+                 booking.customerConfirmed === true) {
+          availableActions.push('RELEASE_FULL');
+        }
+        
+        // ─── SCENARIO 3: FULLY_PAID + DEPOSIT RELEASED ──────────────
+        // Show "Release Remaining" only
+        else if (booking.vendorPaymentStatus === 'FULLY_PAID' && 
+                 customerPaidFull &&
+                 hasDepositPayout && 
+                 !hasRemainingPayout &&
+                 booking.vendorMarkedComplete === true &&
+                 booking.customerConfirmed === true) {
           availableActions.push('RELEASE_REMAINING');
         }
       }
@@ -156,6 +215,10 @@ export async function GET() {
         totalAmount: totalAmount,
         depositAmount: depositAmount,
         remainingAmount: remainingAmount,
+        // ✅ Display amounts for table
+        displayAmount: displayAmount,
+        displayCommission: displayCommission,
+        displayPayout: displayPayout,
         depositPaidAt: booking.depositPaidAt,
         remainingPaidAt: booking.remainingPaidAt,
         hasDepositPayout: hasDepositPayout,
@@ -180,14 +243,19 @@ export async function GET() {
         vendorAccepted: vendorAccepted,
         vendorPending: vendorPending,
         vendorDeclined: vendorDeclined,
-        depositReleaseDisabledReason: !vendorAccepted && customerPaidDeposit && !hasDepositPayout && !hasActiveRefund
+        depositReleaseDisabledReason: booking.vendorPaymentStatus === 'DEPOSIT_PAID' && !vendorAccepted && customerPaidDeposit && !hasActiveRefund
           ? 'Waiting for vendor to accept booking'
+          : booking.vendorPaymentStatus === 'FULLY_PAID' && (!booking.vendorMarkedComplete || !booking.customerConfirmed)
+          ? 'Waiting for vendor and customer to confirm completion'
           : hasActiveRefund
           ? 'Refund in progress - Cannot release funds'
           : null,
-        canBulkRelease: (availableActions.includes('RELEASE_DEPOSIT') || availableActions.includes('RELEASE_REMAINING')),
-        bulkReleaseType: availableActions.includes('RELEASE_DEPOSIT') ? 'deposit' : 
-                         availableActions.includes('RELEASE_REMAINING') ? 'remaining' : null,
+        canBulkRelease: availableActions.includes('RELEASE_REMAINING') || availableActions.includes('RELEASE_FULL'),
+        bulkReleaseType: availableActions.includes('RELEASE_REMAINING') ? 'remaining' : 
+                         availableActions.includes('RELEASE_FULL') ? 'all' :
+                         availableActions.includes('RELEASE_DEPOSIT') ? 'deposit' : null,
+        vendorMarkedComplete: booking.vendorMarkedComplete,
+        customerConfirmed: booking.customerConfirmed,
       };
     });
 
@@ -199,7 +267,6 @@ export async function GET() {
       const organizerPayout = totalAmount - platformCommission;
       
       const hasActiveRefund = booking.refunds.some(
-        // ✅ FIXED: Removed 'PENDING' - it doesn't exist in RefundStatus enum
         r => [RefundStatus.PROCESSED, RefundStatus.PENDING_ADMIN].includes(r.refundStatus as RefundStatus)
       );
 
@@ -227,6 +294,9 @@ export async function GET() {
         totalAmount: totalAmount,
         platformCommission: platformCommission,
         organizerPayout: organizerPayout,
+        displayAmount: totalAmount,
+        displayCommission: platformCommission,
+        displayPayout: organizerPayout,
         ticketName: booking.tier.name,
         ticketNumber: booking.ticketNumber,
         quantity: booking.quantity,

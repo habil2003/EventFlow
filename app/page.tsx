@@ -297,7 +297,6 @@ export default function HomePage() {
               animate={{ rotate: [0, 10, -10, 0] }}
               transition={{ duration: 1, repeat: Infinity }}
             >
-              <SparklesIcon className="mr-1.5 h-4 w-4" />
             </motion.div>
             Nepal's Premier Event Platform
           </motion.div>

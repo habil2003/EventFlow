@@ -1,34 +1,58 @@
+// app/organizer/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { 
-  CalendarIcon, 
-  TicketIcon, 
-  QrCodeIcon, 
+import {
+  CalendarIcon,
+  TicketIcon,
   ChartBarIcon,
-  SparklesIcon,
+  CurrencyRupeeIcon,
+  PlusCircleIcon,
   ArrowRightIcon,
-  CheckCircleIcon,
-  CurrencyRupeeIcon
+  UserGroupIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
+
+interface DashboardStats {
+  totalEvents: number;
+  activeEvents: number;
+  totalTicketsSold: number;
+  totalRevenue: number;
+  upcomingEvents: number;
+  checkInsToday: number;
+  recentEvents: Array<{
+    id: string;
+    title: string;
+    eventDate: string;
+    ticketsSold: number;
+    revenue: number;
+    checkIns: number;
+    status: 'active' | 'completed' | 'upcoming';
+  }>;
+  recentSales: Array<{
+    id: string;
+    eventTitle: string;
+    buyerName: string;
+    amount: number;
+    createdAt: string;
+  }>;
+}
 
 export default function OrganizerDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  
-  // Manual theme management for dark/light classes (no toggle button needed)
-  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [greeting, setGreeting] = useState("");
 
   useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    document.documentElement.classList.toggle("dark", initialTheme === "dark");
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting("Good morning");
+    else if (hour < 17) setGreeting("Good afternoon");
+    else setGreeting("Good evening");
   }, []);
 
   useEffect(() => {
@@ -37,30 +61,36 @@ export default function OrganizerDashboard() {
     }
   }, [status, router]);
 
-  const fadeUp = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
-  };
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!session?.user?.id) return;
+      
+      try {
+        const response = await fetch("/api/organizer/dashboard");
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data);
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const staggerContainer = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
+    if (session?.user?.role === "ORGANIZER") {
+      fetchDashboardData();
     }
-  };
+  }, [session]);
 
-  if (status === "loading" || !mounted) {
+  if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center"
-        >
-          <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent dark:border-indigo-400"></div>
-          <p className="mt-4 text-sm font-medium text-gray-500 dark:text-gray-400">Loading dashboard...</p>
-        </motion.div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+          <p className="mt-4 text-sm text-gray-500">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -69,204 +99,211 @@ export default function OrganizerDashboard() {
     return null;
   }
 
-  const navItems = [
-    { name: "Create Event", href: "/organizer/create", icon: CalendarIcon, color: "from-blue-500 to-blue-600", description: "Set up a new ticketed event" },
-    { name: "My Events", href: "/organizer/events", icon: TicketIcon, color: "from-green-500 to-green-600", description: "Manage your events" },
-    { name: "Check-in", href: "/organizer/checkin", icon: QrCodeIcon, color: "from-indigo-500 to-indigo-600", description: "Scan QR codes at venue" },
-    { name: "Sales", href: "/organizer/sales", icon: ChartBarIcon, color: "from-purple-500 to-purple-600", description: "View revenue analytics" },
-    { name: "Payouts", href: "/organizer/payouts", icon: CurrencyRupeeIcon, color: "from-amber-500 to-amber-600", description: "View payment history" },
+  const data = stats || {
+    totalEvents: 0,
+    activeEvents: 0,
+    totalTicketsSold: 0,
+    totalRevenue: 0,
+    upcomingEvents: 0,
+    checkInsToday: 0,
+    recentEvents: [],
+    recentSales: [],
+  };
+
+  const quickActions = [
+    { 
+      label: "Create Event", 
+      href: "/organizer/create", 
+      icon: PlusCircleIcon, 
+      color: "bg-indigo-600",
+      description: "Set up a new event"
+    },
+    { 
+      label: "My Events", 
+      href: "/organizer/events", 
+      icon: CalendarIcon, 
+      color: "bg-emerald-600",
+      description: "View all your events"
+    },
+    { 
+      label: "Check-in", 
+      href: "/organizer/checkin", 
+      icon: UserGroupIcon, 
+      color: "bg-amber-600",
+      description: "Scan tickets at venue"
+    },
+    { 
+      label: "Sales", 
+      href: "/organizer/sales", 
+      icon: ChartBarIcon, 
+      color: "bg-purple-600",
+      description: "Track revenue"
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-
-      {/* Main Content */}
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        
-        {/* Welcome Section */}
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={fadeUp}
-          className="mb-12 text-center"
-        >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15 }}
-            className="inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/50 px-3 py-1 text-sm font-medium text-indigo-700 dark:text-indigo-300 mb-4"
-          >
-            <SparklesIcon className="mr-1 h-4 w-4" />
-            Organizer Dashboard
-          </motion.div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl md:text-6xl">
-            Welcome back,{" "}
-            <span className="bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">
+    <div>
+      {/* Welcome Section */}
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{greeting}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               {session.user?.name}
-            </span>
-          </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base text-gray-500 dark:text-gray-400 sm:text-lg">
-            Manage your events, track ticket sales, and check in attendees
-          </p>
-        </motion.div>
-
-        {/* Authentication Status Card */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="mb-8 overflow-hidden rounded-2xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/30 border border-green-200 dark:border-green-800 shadow-sm"
-        >
-          <div className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="rounded-full bg-green-100 dark:bg-green-800 p-2">
-                  <CheckCircleIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-green-800 dark:text-green-300">Authentication Verified</h2>
-                  <p className="text-sm text-green-700 dark:text-green-400">You are logged in as Organizer</p>
-                </div>
-              </div>
-              <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-800 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-300">
-                {session.user?.role}
-              </span>
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="rounded-lg bg-white/50 dark:bg-gray-800/50 p-3">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Name</p>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{session.user?.name}</p>
-              </div>
-              <div className="rounded-lg bg-white/50 dark:bg-gray-800/50 p-3">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Email</p>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{session.user?.email}</p>
-              </div>
-            </div>
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Here's what's happening with your events
+            </p>
           </div>
-        </motion.div>
+          <div className="mt-4 sm:mt-0">
+            <Link
+              href="/organizer/create"
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors shadow-sm"
+            >
+              <PlusCircleIcon className="h-5 w-5" />
+              Create Event
+            </Link>
+          </div>
+        </div>
+      </div>
 
-        {/* Quick Actions */}
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={staggerContainer}
-          className="mb-8"
-        >
-          <h2 className="mb-4 text-lg font-bold text-gray-800 dark:text-gray-200">Quick Actions</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {navItems.map((item, idx) => (
-              <motion.div
-                key={idx}
-                variants={fadeUp}
-                whileHover={{ y: -5 }}
-                transition={{ type: "spring", stiffness: 300 }}
-              >
-                <Link
-                  href={item.href}
-                  className="group relative block overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-5 transition-all hover:shadow-lg"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className={`rounded-lg bg-gradient-to-br ${item.color} p-2.5 shadow-md`}>
-                      <item.icon className="h-5 w-5 text-white" />
-                    </div>
-                    <motion.div
-                      initial={{ x: -10, opacity: 0 }}
-                      whileHover={{ x: 0, opacity: 1 }}
-                    >
-                      <ArrowRightIcon className="h-4 w-4 text-gray-400 dark:text-gray-600" />
-                    </motion.div>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-8">
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <CalendarIcon className="h-5 w-5 text-indigo-500 dark:text-indigo-400" />
+          </div>
+          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            {data.totalEvents}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Total Events</p>
+          {data.activeEvents > 0 && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+              {data.activeEvents} active
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <TicketIcon className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
+          </div>
+          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            {data.totalTicketsSold}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Tickets Sold</p>
+        </div>
+
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <CurrencyRupeeIcon className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+          </div>
+          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            NPR {data.totalRevenue.toLocaleString()}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Total Revenue</p>
+        </div>
+
+        <div className="rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <UserGroupIcon className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+          </div>
+          <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+            {data.checkInsToday}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Check-ins Today</p>
+          {data.upcomingEvents > 0 && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              {data.upcomingEvents} upcoming
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-8">
+        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
+          Quick Actions
+        </h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {quickActions.map((action, idx) => (
+            <Link
+              key={idx}
+              href={action.href}
+              className="group rounded-xl bg-white dark:bg-gray-800 p-5 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-all"
+            >
+              <div className={`inline-flex rounded-lg ${action.color} p-2.5 text-white shadow-sm`}>
+                <action.icon className="h-5 w-5" />
+              </div>
+              <p className="mt-3 text-sm font-medium text-gray-900 dark:text-white">
+                {action.label}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                {action.description}
+              </p>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent Events */}
+      <div className="rounded-xl bg-white dark:bg-gray-800 p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900 dark:text-white">Your Events</h3>
+          <Link href="/organizer/events" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+            View all
+          </Link>
+        </div>
+        
+        {data.recentEvents.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500 dark:text-gray-400">No events yet</p>
+            <Link href="/organizer/create" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mt-2 inline-block">
+              Create your first event →
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {data.recentEvents.map((event) => (
+              <div key={event.id} className="flex items-start justify-between pb-4 border-b border-gray-100 dark:border-gray-700 last:border-0 last:pb-0">
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {event.title}
+                  </p>
+                  <div className="flex items-center gap-4 mt-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      📅 {new Date(event.eventDate).toLocaleDateString()}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      🎫 {event.ticketsSold} sold
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      ✅ {event.checkIns} checked in
+                    </span>
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-gray-800 dark:text-gray-200">{item.name}</h3>
-                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{item.description}</p>
-                </Link>
-              </motion.div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    event.status === 'active' 
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                      : event.status === 'upcoming'
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                  }`}>
+                    {event.status}
+                  </span>
+                  <Link 
+                    href={`/organizer/events/${event.id}`}
+                    className="text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                  >
+                    <ArrowRightIcon className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
             ))}
           </div>
-        </motion.div>
-
-        {/* Platform Overview Cards */}
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={staggerContainer}
-          className="mt-12"
-        >
-          <h2 className="mb-6 text-center text-xl font-bold text-gray-800 dark:text-gray-200">
-            Manage Your Events
-          </h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            
-            <motion.div
-              variants={fadeUp}
-              whileHover={{ y: -5, scale: 1.01 }}
-              className="group rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-md border border-gray-100 dark:border-gray-700 transition-all hover:shadow-xl"
-            >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-md">
-                <TicketIcon className="h-6 w-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">🎟️ Ticketed Events</h3>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Create and manage concerts, workshops, seminars, and conferences.
-              </p>
-              <ul className="mt-4 space-y-2">
-                {[
-                  "Tiered ticket pricing (Early Bird, GA, VIP)",
-                  "Khalti & eSewa payment integration",
-                  "QR code tickets & email confirmation",
-                  "Real-time check-in scanner"
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                    <CheckCircleIcon className="mr-2 h-4 w-4 text-green-500 dark:text-green-400" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-
-            <motion.div
-              variants={fadeUp}
-              whileHover={{ y: -5, scale: 1.01 }}
-              className="group rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-md border border-gray-100 dark:border-gray-700 transition-all hover:shadow-xl"
-            >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-md">
-                <ChartBarIcon className="h-6 w-6 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200">📊 Sales Analytics</h3>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Track ticket sales, revenue, and attendance rates.
-              </p>
-              <ul className="mt-4 space-y-2">
-                {[
-                  "Real-time sales dashboard",
-                  "CSV export of attendee data",
-                  "Ticket tier breakdown",
-                  "Check-in rate tracking"
-                ].map((item, i) => (
-                  <li key={i} className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                    <CheckCircleIcon className="mr-2 h-4 w-4 text-green-500 dark:text-green-400" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          </div>
-        </motion.div>
-
-        {/* Footer */}
-        <motion.footer 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-16 border-t border-gray-200 dark:border-gray-700 pt-8 text-center"
-        >
-          <p className="text-xs text-gray-400 dark:text-gray-500">
-            EventFlow — Nepal's Complete Event Management Solution
-          </p>
-          <p className="mt-1 text-xs text-gray-300 dark:text-gray-600">
-            © 2026 Fusion IT Solutions. All rights reserved.
-          </p>
-        </motion.footer>
-      </main>
+        )}
+      </div>
     </div>
   );
 }

@@ -6,11 +6,168 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
-  ShoppingCartIcon
+  ShoppingCartIcon,
+  MinusIcon,
+  PlusIcon,
+  InformationCircleIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import PaymentButton from '@/components/PaymentButton';
 import DateRangePicker from '@/components/DateRangePicker';
 
+// ============================================
+// HELPER: Format description with robust parsing
+// ============================================
+function formatDescription(description: string) {
+  if (!description) return [];
+
+  const lines = description.split('\n');
+  const result: { type: 'heading' | 'bullet' | 'sub-bullet' | 'text' | 'empty'; content: string }[] = [];
+  
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    if (!trimmed) {
+      result.push({ type: 'empty', content: '' });
+      i++;
+      continue;
+    }
+
+    // Check for heading patterns (ALLCAPS with colon, or common heading keywords)
+    const isHeading = (
+      (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && trimmed.includes(':')) ||
+      trimmed.startsWith('#') ||
+      /^(WHAT'S INCLUDED|WHY BOOK|ABOUT|DETAILS|FEATURES|BENEFITS|INCLUDES|SERVICES|TERMS|NOTES|DESCRIPTION|OVERVIEW|HIGHLIGHTS)/i.test(trimmed) ||
+      // Check for emoji at start (using simpler method)
+      /^[🎉✨🌟⭐💡📌📍🔑📋📝📢💎🎯🏆🥇💪🔥✨🎊🎈🎁🎂🍾🥂💫🌟⭐️]/.test(trimmed)
+    );
+
+    if (isHeading) {
+      let heading = trimmed;
+      heading = heading.replace(/^#+\s*/, '');
+      heading = heading.replace(/:$/, '');
+      result.push({ type: 'heading', content: heading });
+      i++;
+      continue;
+    }
+
+    // Check for bullet points with various formats
+    const bulletMatch = trimmed.match(/^[\s]*([-•*→◦▪▸▹◆◇⦿○●])\s+(.*)/);
+    if (bulletMatch) {
+      const bulletChar = bulletMatch[1];
+      const content = bulletMatch[2];
+      const indent = line.search(/\S/);
+      const isSubBullet = indent > 2 || ['.', 'o', '◦', '▪', '▸'].includes(bulletChar);
+      
+      result.push({ 
+        type: isSubBullet ? 'sub-bullet' : 'bullet', 
+        content: content
+      });
+      i++;
+      continue;
+    }
+
+    // Check for numbered lists
+    const numberedMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
+    if (numberedMatch) {
+      result.push({ 
+        type: 'bullet', 
+        content: `${numberedMatch[1]}. ${numberedMatch[2]}` 
+      });
+      i++;
+      continue;
+    }
+
+    // Check for inline bullet points
+    if (trimmed.includes('- ') || trimmed.includes('• ')) {
+      const parts = trimmed.split(/\s*[-•]\s*/);
+      if (parts.length > 1) {
+        result.push({ type: 'text', content: parts[0] });
+        for (let j = 1; j < parts.length; j++) {
+          if (parts[j].trim()) {
+            result.push({ type: 'bullet', content: parts[j].trim() });
+          }
+        }
+        i++;
+        continue;
+      }
+    }
+
+    // Check for section header with colon
+    const colonMatch = trimmed.match(/^([^:]+):\s*(.+)/);
+    if (colonMatch && colonMatch[1].length < 30) {
+      result.push({ type: 'heading', content: colonMatch[1] });
+      result.push({ type: 'text', content: colonMatch[2] });
+      i++;
+      continue;
+    }
+
+    // Regular text
+    result.push({ type: 'text', content: trimmed });
+    i++;
+  }
+
+  return result;
+}
+
+// ============================================
+// COMPONENT: Formatted Description Renderer
+// ============================================
+function FormattedDescription({ description }: { description: string }) {
+  const parsed = formatDescription(description);
+  
+  if (parsed.length === 0) {
+    return <p className="text-gray-500 dark:text-gray-400">No description available</p>;
+  }
+
+  return (
+    <div className="space-y-1.5 text-sm leading-relaxed">
+      {parsed.map((item, index) => {
+        if (item.type === 'empty') {
+          return <div key={index} className="h-2" />;
+        }
+        
+        if (item.type === 'heading') {
+          return (
+            <h4 key={index} className="font-bold text-gray-800 dark:text-gray-200 mt-3 text-sm uppercase tracking-wide">
+              {item.content}
+            </h4>
+          );
+        }
+        
+        if (item.type === 'bullet') {
+          return (
+            <div key={index} className="flex items-start gap-2 ml-1">
+              <span className="text-indigo-500 mt-0.5 flex-shrink-0">•</span>
+              <span className="text-gray-600 dark:text-gray-300">{item.content}</span>
+            </div>
+          );
+        }
+        
+        if (item.type === 'sub-bullet') {
+          return (
+            <div key={index} className="flex items-start gap-2 ml-7">
+              <span className="text-gray-400 mt-0.5 flex-shrink-0">◦</span>
+              <span className="text-gray-500 dark:text-gray-400">{item.content}</span>
+            </div>
+          );
+        }
+        
+        return (
+          <p key={index} className="text-gray-600 dark:text-gray-300">
+            {item.content}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================
+// INTERFACES
+// ============================================
 interface AddOn {
   id: string;
   name: string;
@@ -43,7 +200,9 @@ interface Vendor {
   packages: Package[];
 }
 
-// ✅ Component that uses useSearchParams()
+// ============================================
+// MAIN COMPONENT
+// ============================================
 function VendorBookingContent() {
   const params = useParams();
   const router = useRouter();
@@ -69,6 +228,7 @@ function VendorBookingContent() {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [vendorId, setVendorId] = useState<string | null>(null);
+  const [expandedDescription, setExpandedDescription] = useState(false);
   
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
@@ -90,7 +250,7 @@ function VendorBookingContent() {
     }
   }, [existingEventTitle]);
 
-  // Fetch vendor data and pre-select the package from URL
+  // Fetch vendor data
   useEffect(() => {
     if (!vendorId) return;
 
@@ -149,12 +309,10 @@ function VendorBookingContent() {
 
   const handleGuestCountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
-    
     if (rawValue === "") {
       setGuestCountInput("");
       return;
     }
-    
     if (/^\d+$/.test(rawValue)) {
       setGuestCountInput(rawValue);
     }
@@ -162,14 +320,9 @@ function VendorBookingContent() {
 
   const handleGuestCountBlur = () => {
     let numValue = parseInt(guestCountInput);
-    
-    if (isNaN(numValue)) {
-      numValue = minGuestsAllowed;
-    }
-    
+    if (isNaN(numValue)) numValue = minGuestsAllowed;
     if (numValue < minGuestsAllowed) numValue = minGuestsAllowed;
     if (numValue > maxGuestsAllowed) numValue = maxGuestsAllowed;
-    
     setGuestCount(numValue);
     setGuestCountInput(numValue.toString());
   };
@@ -286,7 +439,6 @@ function VendorBookingContent() {
         sessionStorage.setItem('vendorPaymentReturnData', JSON.stringify(returnData));
         
         setShowPayment(true);
-        alert("Booking created! Please complete the payment to confirm.");
       } else {
         alert(data.error || "Booking failed");
       }
@@ -329,215 +481,338 @@ function VendorBookingContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        
+        {/* Back Button */}
         <div className="mb-6">
           <Link
             href={`/vendors/${vendor.id}/packages?eventId=${existingEventId || ''}&eventTitle=${encodeURIComponent(existingEventTitle || '')}&guestCount=${existingGuestCount || ''}`}
-            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700"
+            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
           >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
+            <ArrowLeftIcon className="h-4 w-4 mr-2" />
             Back to Packages
           </Link>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
-            <h1 className="text-xl font-bold text-white">Complete Your Booking</h1>
-            <p className="text-white/80 text-sm mt-1">{vendor.businessName} - {selectedPkg.name}</p>
-          </div>
+        {/* Main Grid - 2 Columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          <div className="p-6">
-            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-semibold text-lg text-gray-900 dark:text-white">{selectedPkg.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{selectedPkg.description}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                    NPR {selectedPkg.price.toLocaleString()}
-                    {selectedPkg.pricingType === "per_person" && <span className="text-sm">/person/day</span>}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {selectedPkg.addOns.length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Add-Ons</h3>
-                <div className="space-y-2">
-                  {selectedPkg.addOns.map((addOn) => (
-                    <label key={addOn.id} className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedAddOns.includes(addOn.id)} 
-                          onChange={() => handleAddOnToggle(addOn.id)} 
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">{addOn.name}</span>
-                      </div>
-                      <span className="text-indigo-600 dark:text-indigo-400">+ NPR {addOn.extraPrice.toLocaleString()}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4 mb-6">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Event Details</h3>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Title *</label>
-                <input 
-                  type="text" 
-                  value={eventTitle} 
-                  onChange={(e) => setEventTitle(e.target.value)} 
-                  className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  placeholder="e.g., Rita's Wedding" 
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Event Dates *
-                </label>
-                <DateRangePicker
-                  vendorId={vendorId || ''}
-                  onSelect={(start, end, days) => {
-                    setStartDate(start);
-                    setEndDate(end);
-                    setTotalDays(days);
-                    if (days >= 8) setDiscountPercent(15);
-                    else if (days >= 4) setDiscountPercent(10);
-                    else if (days >= 2) setDiscountPercent(5);
-                    else setDiscountPercent(0);
-                  }}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Guest Count
-                  {selectedPkg.pricingType === "per_person" && (
-                    <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">(Affects total price)</span>
-                  )}
-                </label>
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={decrementGuestCount} 
-                    disabled={guestCount <= minGuestsAllowed}
-                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    -
-                  </button>
-                  <input 
-                    type="text" 
-                    value={guestCountInput} 
-                    onChange={handleGuestCountInputChange} 
-                    onBlur={handleGuestCountBlur}
-                    className="w-28 text-center px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                  />
-                  <button 
-                    onClick={incrementGuestCount} 
-                    disabled={guestCount >= maxGuestsAllowed}
-                    className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="flex justify-between items-center mt-1">
-                  <p className="text-xs text-gray-400">
-                    Min: {minGuestsAllowed} | Max: {maxGuestsAllowed === 10000 ? 'Unlimited' : maxGuestsAllowed}
-                  </p>
-                  {guestCount < minGuestsAllowed && (
-                    <p className="text-xs text-red-500">Minimum {minGuestsAllowed} guests required</p>
-                  )}
-                  {guestCount > maxGuestsAllowed && (
-                    <p className="text-xs text-red-500">Maximum {maxGuestsAllowed} guests allowed</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4 mb-6">
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-600 dark:text-gray-300">{selectedPkg.name} Package (per day)</span>
-                <span className="text-gray-900 dark:text-white font-medium">NPR {packagePrice.toLocaleString()}</span>
-              </div>
-              
-              {totalDays > 1 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-gray-400">Number of days</span>
-                  <span className="text-gray-600 dark:text-gray-300">{totalDays} days</span>
-                </div>
-              )}
-              
-              {discountPercent > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
-                  <span>Multi-day discount ({discountPercent}%)</span>
-                  <span>- NPR {multiDayDiscountAmount.toLocaleString()}</span>
-                </div>
-              )}
-              
-              <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
-                <span className="text-gray-600 dark:text-gray-300">Subtotal ({totalDays} days)</span>
-                <span className="text-gray-900 dark:text-white font-medium">NPR {priceAfterDiscount.toLocaleString()}</span>
-              </div>
-              
-              {selectedAddOns.map(addOnId => {
-                const addOn = selectedPkg.addOns.find(a => a.id === addOnId);
-                if (!addOn) return null;
-                const addOnPrice = addOn.pricingType === "per_person" ? addOn.extraPrice * guestCountNum : addOn.extraPrice;
-                return (
-                  <div key={addOn.id} className="flex justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400">+ {addOn.name}</span>
-                    <span className="text-gray-600 dark:text-gray-300">+ NPR {addOnPrice.toLocaleString()}</span>
+          {/* LEFT COLUMN - Package Details & Form */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Package Header */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {selectedPkg.name}
+                    </h1>
+                    <div className="flex items-center gap-4 mt-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                        {vendor.businessName}
+                      </span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        📍 {vendor.location}
+                      </span>
+                    </div>
                   </div>
-                );
-              })}
-              
-              <div className="border-t border-gray-200 dark:border-gray-600 pt-2 mt-2">
-                <div className="flex justify-between font-bold">
-                  <span className="text-gray-900 dark:text-white">Total Amount</span>
-                  <span className="text-indigo-600 dark:text-indigo-400 text-xl">NPR {totalAmount.toLocaleString()}</span>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+                      NPR {packagePrice.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                      {isPerPerson ? 'per person / day' : 'per day'}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm mt-1">
-                  <span className="text-gray-500 dark:text-gray-400">Deposit (20%)</span>
-                  <span className="text-gray-600 dark:text-gray-300">NPR {calculatedDepositAmount.toLocaleString()}</span>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">💰 Deposit of {calculatedDepositAmount.toLocaleString()} NPR (20%) required at checkout</p>
               </div>
             </div>
 
-            {!showPayment ? (
-              <button
-                onClick={handleBooking}
-                disabled={booking || !isGuestCountValid() || !startDate || !endDate}
-                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {booking ? "Creating Booking..." : `Confirm Booking (20% Deposit - NPR ${calculatedDepositAmount.toLocaleString()})`}
-              </button>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                  <p className="text-green-700 dark:text-green-300 text-sm">
-                    ✓ Booking created successfully!
-                  </p>
-                  <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">
-                    Please complete the payment to confirm your booking.
-                  </p>
+            {/* Package Description - With Robust Formatter */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    📋 Package Details
+                  </h3>
+                  <button
+                    onClick={() => setExpandedDescription(!expandedDescription)}
+                    className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                  >
+                    {expandedDescription ? 'Show less' : 'Read more'}
+                  </button>
                 </div>
-                <PaymentButton
-                  amount={depositAmount}
-                  bookingId={createdBookingId!}
-                  paymentType="VENDOR_DEPOSIT"
-                  gateway="khalti"
-                  buttonText={`Pay Deposit (20% - NPR ${depositAmount.toLocaleString()})`}
-                  returnUrl={getSimpleReturnUrl()}
-                />
+                
+                <div className={`mt-3 text-gray-600 dark:text-gray-300 ${expandedDescription ? '' : 'max-h-48 overflow-hidden relative'}`}>
+                  <FormattedDescription description={selectedPkg.description} />
+                  {!expandedDescription && (
+                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white dark:from-gray-800 to-transparent" />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Add-ons */}
+            {selectedPkg.addOns.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    ✨ Add-Ons
+                  </h3>
+                  <div className="space-y-3">
+                    {selectedPkg.addOns.map((addOn) => (
+                      <label
+                        key={addOn.id}
+                        className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all ${
+                          selectedAddOns.includes(addOn.id)
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedAddOns.includes(addOn.id)}
+                            onChange={() => handleAddOnToggle(addOn.id)}
+                            className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {addOn.name}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {addOn.pricingType === "per_person" ? 'Per person' : 'Fixed price'}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                          + NPR {addOn.extraPrice.toLocaleString()}
+                          {addOn.pricingType === "per_person" && '/person'}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* Event Details Form */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  📝 Event Details
+                </h3>
+                
+                <div className="space-y-4">
+                  {/* Event Title */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Event Title *
+                    </label>
+                    <input
+                      type="text"
+                      value={eventTitle}
+                      onChange={(e) => setEventTitle(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      placeholder="e.g., Rita's Wedding"
+                    />
+                  </div>
+
+                  {/* Date Picker */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Event Dates *
+                    </label>
+                    <DateRangePicker
+                      vendorId={vendorId || ''}
+                      onSelect={(start, end, days) => {
+                        setStartDate(start);
+                        setEndDate(end);
+                        setTotalDays(days);
+                        if (days >= 8) setDiscountPercent(15);
+                        else if (days >= 4) setDiscountPercent(10);
+                        else if (days >= 2) setDiscountPercent(5);
+                        else setDiscountPercent(0);
+                      }}
+                    />
+                  </div>
+
+                  {/* Guest Count */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Guest Count
+                      {isPerPerson && (
+                        <span className="text-xs text-blue-600 dark:text-blue-400 ml-2">
+                          (Affects total price)
+                        </span>
+                      )}
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={decrementGuestCount}
+                        disabled={guestCount <= minGuestsAllowed}
+                        className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                      >
+                        <MinusIcon className="h-5 w-5" />
+                      </button>
+                      <input
+                        type="text"
+                        value={guestCountInput}
+                        onChange={handleGuestCountInputChange}
+                        onBlur={handleGuestCountBlur}
+                        className="w-32 text-center px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                      <button
+                        onClick={incrementGuestCount}
+                        disabled={guestCount >= maxGuestsAllowed}
+                        className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                      >
+                        <PlusIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <div className="flex justify-between items-center mt-2">
+                      <p className="text-xs text-gray-400">
+                        Min: {minGuestsAllowed} | Max: {maxGuestsAllowed === 10000 ? 'Unlimited' : maxGuestsAllowed}
+                      </p>
+                      {guestCount < minGuestsAllowed && (
+                        <p className="text-xs text-red-500">Minimum {minGuestsAllowed} guests required</p>
+                      )}
+                      {guestCount > maxGuestsAllowed && (
+                        <p className="text-xs text-red-500">Maximum {maxGuestsAllowed} guests allowed</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN - Sticky Booking Summary */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-24">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
+                  <h3 className="text-white font-semibold flex items-center gap-2">
+                    <ShoppingCartIcon className="h-5 w-5" />
+                    Booking Summary
+                  </h3>
+                </div>
+                
+                <div className="p-6 space-y-4">
+                  {/* Package */}
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Package</p>
+                    <p className="font-medium text-gray-900 dark:text-white">{selectedPkg.name}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      NPR {packagePrice.toLocaleString()} 
+                      {isPerPerson ? ` × ${guestCountNum} guests` : ''}
+                      {totalDays > 1 ? ` × ${totalDays} days` : ''}
+                    </p>
+                  </div>
+
+                  <hr className="border-gray-200 dark:border-gray-700" />
+
+                  {/* Price Breakdown */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">Base Price</span>
+                      <span className="text-gray-900 dark:text-white">NPR {basePriceDisplay.toLocaleString()}</span>
+                    </div>
+                    
+                    {totalDays > 1 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Days</span>
+                        <span className="text-gray-900 dark:text-white">× {totalDays}</span>
+                      </div>
+                    )}
+                    
+                    {discountPercent > 0 && (
+                      <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                        <span>Discount ({discountPercent}%)</span>
+                        <span>- NPR {multiDayDiscountAmount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    
+                    {selectedAddOns.map(addOnId => {
+                      const addOn = selectedPkg.addOns.find(a => a.id === addOnId);
+                      if (!addOn) return null;
+                      const addOnPrice = addOn.pricingType === "per_person" 
+                        ? addOn.extraPrice * guestCountNum 
+                        : addOn.extraPrice;
+                      return (
+                        <div key={addOn.id} className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">+ {addOn.name}</span>
+                          <span className="text-gray-900 dark:text-white">+ NPR {addOnPrice.toLocaleString()}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <hr className="border-gray-200 dark:border-gray-700" />
+
+                  {/* Total */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-lg font-bold">
+                      <span className="text-gray-900 dark:text-white">Total</span>
+                      <span className="text-indigo-600 dark:text-indigo-400">
+                        NPR {totalAmount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500 dark:text-gray-400">Deposit (20%)</span>
+                      <span className="text-gray-700 dark:text-gray-300 font-medium">
+                        NPR {calculatedDepositAmount.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 mt-2">
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400 flex items-start gap-2">
+                        <InformationCircleIcon className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <span>Deposit of {calculatedDepositAmount.toLocaleString()} NPR (20%) required at checkout</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Booking Button */}
+                  {!showPayment ? (
+                    <button
+                      onClick={handleBooking}
+                      disabled={booking || !isGuestCountValid() || !startDate || !endDate}
+                      className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-base"
+                    >
+                      {booking ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Creating Booking...
+                        </span>
+                      ) : (
+                        `Confirm Booking (${calculatedDepositAmount.toLocaleString()} NPR Deposit)`
+                      )}
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-xl">
+                        <p className="text-green-700 dark:text-green-300 text-sm font-medium flex items-center gap-2">
+                          <CheckCircleIcon className="h-5 w-5" />
+                          Booking created successfully!
+                        </p>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mt-1">
+                          Complete the payment to confirm your booking.
+                        </p>
+                      </div>
+                      <PaymentButton
+                        amount={depositAmount}
+                        bookingId={createdBookingId!}
+                        paymentType="VENDOR_DEPOSIT"
+                        gateway="khalti"
+                        buttonText={`Pay Deposit (NPR ${depositAmount.toLocaleString()})`}
+                        returnUrl={getSimpleReturnUrl()}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -545,7 +820,9 @@ function VendorBookingContent() {
   );
 }
 
-// ✅ Main export with Suspense boundary
+// ============================================
+// EXPORT with Suspense Boundary
+// ============================================
 export default function VendorBookingPage() {
   return (
     <Suspense fallback={

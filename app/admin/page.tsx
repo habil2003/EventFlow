@@ -1,3 +1,4 @@
+// app/admin/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -12,12 +13,15 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
-  HomeIcon,
   DocumentTextIcon,
   BanknotesIcon,
   CalendarIcon,
   ArrowTrendingUpIcon,
   ShieldCheckIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
+  CurrencyDollarIcon,
+  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 
 interface DashboardStats {
@@ -87,7 +91,6 @@ export default function AdminDashboard() {
 
         if (statsRes.ok) {
           const statsData = await statsRes.json();
-          console.log("Stats Data:", statsData);
           setStats(statsData);
         }
         if (usersRes.ok) setUsers(await usersRes.json());
@@ -95,7 +98,6 @@ export default function AdminDashboard() {
         if (organizersRes.ok) setOrganizers(await organizersRes.json());
         if (commissionRes.ok) {
           const commissionData = await commissionRes.json();
-          console.log("Commission Data:", commissionData);
           setTotalCommission(commissionData.summary.totalCommission);
           setTotalReleased(commissionData.summary.totalReleased);
           setPayoutsCount(commissionData.summary.totalPayouts);
@@ -146,7 +148,7 @@ export default function AdminDashboard() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
           <p className="mt-4 text-sm font-medium text-gray-500">
@@ -165,45 +167,54 @@ export default function AdminDashboard() {
   const pendingOrganizers = organizers.filter((o) => o.status === "PENDING");
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 transition-colors duration-300">
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        {/* Message Alert */}
-        {message && (
-          <div
-            className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 rounded-xl p-4 shadow-lg min-w-[300px] text-center ${
-              message.type === "success"
-                ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800"
-                : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800"
-            }`}
-          >
-            <div className="flex items-center justify-center gap-3">
-              {message.type === "success" ? (
-                <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
-              ) : (
-                <XCircleIcon className="h-5 w-5 text-red-600 dark:text-red-400" />
-              )}
-              <p
-                className={`text-sm font-medium ${message.type === "success" ? "text-green-800 dark:text-green-300" : "text-red-800 dark:text-red-300"}`}
-              >
-                {message.text}
-              </p>
-            </div>
+    <>
+      {/* Message Alert */}
+      {message && (
+        <div
+          className={`fixed top-4 right-4 z-50 rounded-xl p-4 shadow-lg min-w-[300px] text-center animate-slide-in ${
+            message.type === "success"
+              ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800"
+              : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800"
+          }`}
+        >
+          <div className="flex items-center justify-center gap-3">
+            {message.type === "success" ? (
+              <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+            ) : (
+              <XCircleIcon className="h-5 w-5 text-red-600 dark:text-red-400" />
+            )}
+            <p
+              className={`text-sm font-medium ${message.type === "success" ? "text-green-800 dark:text-green-300" : "text-red-800 dark:text-red-300"}`}
+            >
+              {message.text}
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Admin Dashboard
-          </h1>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">
-            Manage users, vendors, organizers, and platform analytics
-          </p>
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Admin Dashboard
+        </h1>
+        <p className="mt-2 text-gray-500 dark:text-gray-400">
+          Manage users, vendors, organizers, and platform analytics
+        </p>
+      </div>
+
+      {/* Section: Platform Overview */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-4">
+          <ChartBarIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Platform Overview
+          </h2>
+          <div className="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
         </div>
 
         {/* Stats Cards - Row 1 */}
         {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
                 <div>
@@ -281,10 +292,21 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Section: Financial Overview */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-4 mt-8">
+          <CurrencyDollarIcon className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Financial Overview
+          </h2>
+          <div className="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+        </div>
 
         {/* Stats Cards - Row 2 (Financial) */}
         {stats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 hover:shadow-md transition-all">
               <div className="flex items-center justify-between">
                 <div>
@@ -365,9 +387,19 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+      </div>
 
-        {/* Quick Action Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* Section: Quick Actions */}
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-4 mt-8">
+          <Cog6ToothIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Quick Actions
+          </h2>
+          <div className="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href="/admin/approvals?tab=vendors" className="block">
             <div className="group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-yellow-200 dark:border-yellow-800 hover:border-yellow-400 dark:hover:border-yellow-600 hover:shadow-lg transition-all duration-200 p-5 cursor-pointer overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-yellow-50 to-transparent dark:from-yellow-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
@@ -475,13 +507,24 @@ export default function AdminDashboard() {
             </div>
           </Link>
         </div>
+      </div>
+
+      {/* Section: User Management */}
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <UserGroupIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            User Management
+          </h2>
+          <div className="flex-1 border-t border-gray-200 dark:border-gray-700"></div>
+        </div>
 
         {/* Tabs - Users, Vendors, Organizers */}
         <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
-          <nav className="flex gap-6">
+          <nav className="flex gap-6 overflow-x-auto">
             <button
               onClick={() => setActiveTab("users")}
-              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
                 activeTab === "users"
                   ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -492,7 +535,7 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={() => setActiveTab("vendors")}
-              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
                 activeTab === "vendors"
                   ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -508,7 +551,7 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={() => setActiveTab("organizers")}
-              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 ${
+              className={`pb-3 px-1 text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
                 activeTab === "organizers"
                   ? "border-b-2 border-indigo-600 text-indigo-600 dark:text-indigo-400"
                   : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
@@ -875,7 +918,7 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

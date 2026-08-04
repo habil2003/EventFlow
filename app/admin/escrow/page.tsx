@@ -68,6 +68,10 @@ interface EscrowBooking {
   bulkReleaseType?: string | null;
   ticketNumber?: string;
   hasParentPayout?: boolean;
+  // ✅ New display fields
+  displayAmount?: number;
+  displayCommission?: number;
+  displayPayout?: number;
 }
 
 interface EventGroup {
@@ -112,7 +116,7 @@ export default function AdminEscrowPage() {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const [modalAction, setModalAction] = useState<
-    "deposit" | "remaining" | "ticket" | null
+    "deposit" | "remaining" | "ticket" | "all" | null
   >(null);
   const [escrowType, setEscrowType] = useState<"all" | "VENDOR" | "TICKET">(
     "all",
@@ -184,6 +188,8 @@ export default function AdminEscrowPage() {
       confirmMessage = `Release TICKET funds of NPR ${amountNPR}?\n\n• Platform Commission (10%): NPR ${commission}\n• Organizer will receive: NPR ${payout}\n\nAfter this, you will need to manually transfer the money to the organizer and verify.`;
     } else if (type === "deposit") {
       confirmMessage = `Release DEPOSIT of NPR ${amountNPR}?\n\n• Platform Commission (10%): NPR ${commission}\n• Vendor will receive: NPR ${payout}\n\nAfter this, you will need to manually transfer the money to the vendor and verify.`;
+    } else if (type === "all") {
+      confirmMessage = `Release FULL amount of NPR ${amountNPR}?\n\n• Platform Commission (10%): NPR ${commission}\n• Vendor will receive: NPR ${payout}\n\nAfter this, you will need to manually transfer the money to the vendor and verify.`;
     } else {
       confirmMessage = `Release REMAINING amount of NPR ${amountNPR}?\n\n• Platform Commission (10%): NPR ${commission}\n• Vendor will receive: NPR ${payout}\n\nAfter this, you will need to manually transfer the money to the vendor and verify.`;
     }
@@ -282,7 +288,6 @@ export default function AdminEscrowPage() {
   };
 
   const openBulkReleaseModal = (group: EventGroup) => {
-    // ✅ FIX: Filter only bookings that can be released (not already released)
     const releasableBookings = group.bookings.filter((b) => b.canRelease);
 
     if (releasableBookings.length === 0) {
@@ -294,7 +299,6 @@ export default function AdminEscrowPage() {
       return;
     }
 
-    // ✅ Calculate totals only for releasable bookings
     const totalAmount = releasableBookings.reduce(
       (sum, b) => sum + b.totalAmount,
       0,
@@ -308,7 +312,6 @@ export default function AdminEscrowPage() {
       0,
     );
 
-    // ✅ Create a filtered group with only releasable bookings
     const filteredGroup: EventGroup = {
       ...group,
       bookings: releasableBookings,
@@ -334,7 +337,6 @@ export default function AdminEscrowPage() {
 
     setUploading(true);
     try {
-      // Upload proof image
       const formData = new FormData();
       formData.append("file", verificationData.proofImage);
 
@@ -345,7 +347,6 @@ export default function AdminEscrowPage() {
       const uploadData = await uploadRes.json();
       const proofImageUrl = uploadData.url;
 
-      // ✅ Check if this is a bulk verification
       if (
         selectedPayout.isBulk &&
         selectedPayout.payoutIds &&
@@ -357,7 +358,6 @@ export default function AdminEscrowPage() {
           payoutIds: selectedPayout.payoutIds,
         });
 
-        // ✅ Use bulk verify API
         const response = await fetch("/api/admin/verify-payout/bulk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -397,7 +397,6 @@ export default function AdminEscrowPage() {
           setTimeout(() => setMessage(null), 5000);
         }
       } else {
-        // ✅ Individual verification (existing flow)
         const response = await fetch("/api/admin/verify-payout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -449,7 +448,7 @@ export default function AdminEscrowPage() {
 
   const openReleaseModal = (
     booking: EscrowBooking,
-    action: "deposit" | "remaining" | "ticket",
+    action: "deposit" | "remaining" | "ticket" | "all",
   ) => {
     setSelectedBooking(booking);
     setModalAction(action);
@@ -461,17 +460,13 @@ export default function AdminEscrowPage() {
     setShowVerifyModal(true);
   };
 
-  // Bulk verification modal opener
   const openBulkVerifyModal = (group: EventGroup) => {
-    // ✅ Filter ONLY bulk tickets (tickets with pending payouts that have a parentPayout)
     const bulkTickets = group.bookings.filter((b) => {
-      // Check if this booking has a pending payout that is linked to a parent (bulk)
       const hasBulkPayout =
         b.pendingPayouts?.some((p) => p.parentPayoutId !== null) || false;
       return hasBulkPayout;
     });
 
-    // ✅ If no bulk tickets found, show error
     if (bulkTickets.length === 0) {
       setMessage({
         text: "No bulk tickets found to verify. Individual tickets can be verified individually.",
@@ -481,7 +476,6 @@ export default function AdminEscrowPage() {
       return;
     }
 
-    // ✅ Calculate totals only for bulk tickets
     const totalPayout = bulkTickets.reduce(
       (sum, b) => sum + (b.organizerPayout || 0),
       0,
@@ -492,12 +486,10 @@ export default function AdminEscrowPage() {
       0,
     );
 
-    // ✅ Find ALL pending payouts for bulk tickets only
     const allPendingPayouts: any[] = [];
     for (const booking of bulkTickets) {
       if (booking.pendingPayouts && booking.pendingPayouts.length > 0) {
         for (const payout of booking.pendingPayouts) {
-          // ✅ Only include payouts that are linked to a parent (bulk)
           if (payout.parentPayoutId) {
             if (!allPendingPayouts.some((p) => p.id === payout.id)) {
               allPendingPayouts.push(payout);
@@ -507,7 +499,6 @@ export default function AdminEscrowPage() {
       }
     }
 
-    // ✅ If no pending payouts found, show error
     if (allPendingPayouts.length === 0) {
       setMessage({
         text: "No pending payouts found for these bulk tickets.",
@@ -520,7 +511,6 @@ export default function AdminEscrowPage() {
     console.log("Bulk verification - bulk tickets:", bulkTickets.length);
     console.log("Pending payouts found:", allPendingPayouts.length);
 
-    // Create a bulk payout object
     const bulkPayout = {
       id: "bulk-" + group.eventId,
       vendorPayout: totalPayout,
@@ -574,36 +564,46 @@ export default function AdminEscrowPage() {
 
       if (fullyReleased) {
         return {
-          text: "Fully Released",
+          text: "✅ Fully Released",
           color:
             "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
           icon: CheckCircleIcon,
         };
       }
 
-      const depositReleasedByAdmin =
-        booking.hasDepositPayout || !!booking.depositReleasedAt;
-
-      if (depositReleasedByAdmin) {
-        if (!booking.customerPaidFull) {
-          return {
-            text: "Deposit Released - Awaiting Customer Payment",
-            color:
-              "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-            icon: ClockIcon,
-          };
-        }
-        if (booking.customerPaidFull && !booking.hasRemainingPayout) {
-          return {
-            text: "Ready to Release Remaining",
-            color:
-              "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
-            icon: CurrencyRupeeIcon,
-          };
-        }
+      // ✅ CASE 1: FULLY_PAID + Both Confirmed → Ready to Release
+      if (
+        booking.vendorPaymentStatus === "FULLY_PAID" &&
+        booking.vendorMarkedComplete === true &&
+        booking.customerConfirmed === true &&
+        !booking.hasRemainingPayout
+      ) {
+        return {
+          text: "✅ Fully Paid - Ready to Release",
+          color:
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+          icon: CheckCircleIcon,
+        };
       }
 
-      if (booking.customerPaidDeposit && !depositReleasedByAdmin) {
+      // ✅ CASE 2: FULLY_PAID + Waiting for Confirmations
+      if (
+        booking.vendorPaymentStatus === "FULLY_PAID" &&
+        (!booking.vendorMarkedComplete || !booking.customerConfirmed)
+      ) {
+        let waitingFor = [];
+        if (!booking.vendorMarkedComplete) waitingFor.push("Vendor");
+        if (!booking.customerConfirmed) waitingFor.push("Customer");
+        return {
+          text: `⏳ Waiting for ${waitingFor.join(" & ")} Confirmation`,
+          color:
+            "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+          icon: ClockIcon,
+        };
+      }
+
+      // ✅ CASE 3: DEPOSIT_PAID → Deposit Ready
+      if (booking.customerPaidDeposit && !booking.hasDepositPayout) {
         return {
           text: "Deposit Paid - Ready to Release",
           color:
@@ -612,12 +612,29 @@ export default function AdminEscrowPage() {
         };
       }
 
-      if (booking.customerPaidFull && !depositReleasedByAdmin) {
+      // ✅ CASE 4: Deposit Released, Awaiting Remaining
+      const depositReleasedByAdmin =
+        booking.hasDepositPayout || !!booking.depositReleasedAt;
+      if (depositReleasedByAdmin && !booking.customerPaidFull) {
         return {
-          text: "Fully Paid - Ready to Release",
+          text: "Deposit Released - Awaiting Customer Payment",
           color:
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-          icon: CheckCircleIcon,
+            "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+          icon: ClockIcon,
+        };
+      }
+
+      // ✅ CASE 5: Deposit Released, Remaining Ready
+      if (
+        depositReleasedByAdmin &&
+        booking.customerPaidFull &&
+        !booking.hasRemainingPayout
+      ) {
+        return {
+          text: "Ready to Release Remaining",
+          color:
+            "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+          icon: CurrencyRupeeIcon,
         };
       }
 
@@ -711,6 +728,19 @@ export default function AdminEscrowPage() {
 
   const totalHeldAmount = heldBookings.reduce((sum, b) => {
     if (b.type === "VENDOR") {
+      // ✅ If processing payout, check what's actually remaining in escrow
+      if (b.paymentStatus === "PROCESSING_PAYOUT") {
+        // For FULL release, nothing is left in escrow
+        if (b.hasPendingPayout) {
+          const pendingPayout = b.pendingPayouts[0];
+          if (pendingPayout?.type === "FULL") {
+            return sum + 0; // Full release → nothing left
+          }
+        }
+        // For remaining release, only remaining is left
+        return sum + (b.remainingAmount || 0);
+      }
+      // HELD_IN_ESCROW
       if (b.hasDepositPayout && !b.hasRemainingPayout) {
         return sum + (b.remainingAmount || 0);
       }
@@ -809,6 +839,17 @@ export default function AdminEscrowPage() {
           )}
         </AnimatePresence>
 
+        {/* ============================================ */}
+        {/* SECTION 1: Escrow Overview */}
+        {/* ============================================ */}
+        <div className="flex items-center gap-3 mb-4">
+          <BanknotesIcon className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Escrow Overview
+          </h2>
+          <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
@@ -888,331 +929,19 @@ export default function AdminEscrowPage() {
           </div>
         </div>
 
-        {/* Event Groups Section - Show ALL ticket groups */}
-        {eventGroups.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                🎫 Ticket Events
-              </h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {eventGroups.length} event(s)
-              </span>
-            </div>
-            <div className="grid grid-cols-1 gap-4">
-              {eventGroups.map((group) => {
-                // Check statuses
-                const allProcessing = group.bookings.every(
-                  (b) => b.paymentStatus === "PROCESSING_PAYOUT",
-                );
-                const allCompleted = group.bookings.every(
-                  (b) => b.paymentStatus === "COMPLETED",
-                );
-                const hasReleaseable = group.bookings.some((b) => b.canRelease);
-                const hasPendingPayout = group.bookings.some(
-                  (b) => b.pendingPayouts && b.pendingPayouts.length > 0,
-                );
+        {/* ============================================ */}
+        {/* SECTION 2: Pending Actions */}
+        {/* ============================================ */}
+        <div className="flex items-center gap-3 mb-4 mt-8">
+          <ClockIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Pending Actions
+          </h2>
+          <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
+        </div>
 
-                // ✅ Check if any ticket is a bulk child (has parentPayout)
-                const hasBulkTickets = group.bookings.some(
-                  (b) => b.hasParentPayout === true,
-                );
-
-                // ✅ Check if any ticket has individual pending payout (not bulk)
-                const hasIndividualPending = group.bookings.some(
-                  (b) =>
-                    b.pendingPayouts &&
-                    b.pendingPayouts.length > 0 &&
-                    b.pendingPayouts.some((p) => p.parentPayoutId === null),
-                );
-
-                let firstPendingPayout = null;
-                for (const booking of group.bookings) {
-                  if (
-                    booking.pendingPayouts &&
-                    booking.pendingPayouts.length > 0
-                  ) {
-                    firstPendingPayout = booking.pendingPayouts[0];
-                    break;
-                  }
-                }
-
-                // ✅ Determine if we should show bulk verify button
-                const showBulkVerify = allProcessing && hasPendingPayout;
-
-                return (
-                  <div
-                    key={group.eventId}
-                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow"
-                  >
-                    <div className="p-5">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                                allCompleted
-                                  ? "bg-green-100 dark:bg-green-900/30"
-                                  : allProcessing
-                                    ? "bg-purple-100 dark:bg-purple-900/30"
-                                    : "bg-green-100 dark:bg-green-900/30"
-                              }`}
-                            >
-                              {allCompleted ? (
-                                <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
-                              ) : allProcessing ? (
-                                <ArrowPathIcon className="h-5 w-5 text-purple-600 dark:text-purple-400 animate-spin" />
-                              ) : (
-                                <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
-                              )}
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                {group.eventTitle}
-                              </h3>
-                              <div className="flex flex-wrap items-center gap-3 mt-1">
-                                <span className="text-sm text-gray-500 dark:text-gray-400">
-                                  📅{" "}
-                                  {new Date(
-                                    group.eventDate,
-                                  ).toLocaleDateString()}
-                                </span>
-                                <span className="text-sm text-gray-500 dark:text-gray-400">
-                                  👤 {group.organizerName}
-                                </span>
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    allCompleted
-                                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                      : allProcessing
-                                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
-                                        : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                  }`}
-                                >
-                                  {/* ✅ Show bulkReleaseCount for the "Release All Tickets" button */}
-                                  {group.bulkReleaseCount &&
-                                  group.bulkReleaseCount > 0
-                                    ? group.bulkReleaseCount
-                                    : group.displayCount || group.count}{" "}
-                                  tickets
-                                  {allCompleted && " ✅ Released"}
-                                  {allProcessing && " 🔄 Processing"}
-                                  {!allCompleted &&
-                                    !allProcessing &&
-                                    hasReleaseable &&
-                                    " 🔓 Ready"}
-                                  {/* ✅ Show additional info when some tickets are already processing */}
-                                  {group.processingCount &&
-                                    group.processingCount > 0 &&
-                                    group.bulkReleaseCount &&
-                                    group.bulkReleaseCount > 0 &&
-                                    ` (${group.processingCount} processing)`}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions - Conditional Buttons */}
-                        <div className="flex gap-2 flex-wrap">
-                          {hasReleaseable &&
-                            !allProcessing &&
-                            !allCompleted && (
-                              <button
-                                onClick={() => openBulkReleaseModal(group)}
-                                disabled={bulkReleasing}
-                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                              >
-                                <BanknotesIcon className="h-4 w-4" />
-                                Release {group.bulkReleaseCount || ""} Tickets
-                              </button>
-                            )}
-
-                          {showBulkVerify && (
-                            <button
-                              onClick={() => openBulkVerifyModal(group)}
-                              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                            >
-                              <CheckCircleIcon className="h-4 w-4" />
-                              Confirm Transfer (All Tickets)
-                            </button>
-                          )}
-
-                          {allCompleted && (
-                            <span className="inline-flex items-center px-4 py-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-lg">
-                              <CheckCircleIcon className="h-4 w-4 mr-2" />
-                              Completed
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Summary Bar - Use bulk totals for release button */}
-                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3">
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Total Sales
-                          </p>
-                          <p className="font-semibold text-gray-900 dark:text-white">
-                            NPR{" "}
-                            {(
-                              (group as any).bulkTotalAmount ||
-                              group.totalAmount
-                            ).toLocaleString()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Platform Fee (10%)
-                          </p>
-                          <p className="font-semibold text-red-600 dark:text-red-400">
-                            -NPR{" "}
-                            {(
-                              (group as any).bulkTotalCommission ||
-                              group.totalCommission
-                            ).toLocaleString()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Organizer Receives
-                          </p>
-                          <p className="font-semibold text-green-600 dark:text-green-400">
-                            NPR{" "}
-                            {(
-                              (group as any).bulkOrganizerPayout ||
-                              group.organizerPayout
-                            ).toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Toggle to see individual tickets */}
-                      <button
-                        onClick={() => toggleGroup(group.eventId)}
-                        className="mt-3 text-sm text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
-                      >
-                        {expandedGroups.has(group.eventId) ? (
-                          <ChevronDownIcon className="h-4 w-4" />
-                        ) : (
-                          <ChevronRightIcon className="h-4 w-4" />
-                        )}
-                        {expandedGroups.has(group.eventId) ? "Hide" : "Show"}{" "}
-                        individual tickets
-                      </button>
-
-                      {/* Expanded ticket list */}
-                      <AnimatePresence>
-                        {expandedGroups.has(group.eventId) && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="mt-3 overflow-hidden"
-                          >
-                            <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
-                              <div className="space-y-2">
-                                {group.bookings.map((booking) => {
-                                  const statusBadge =
-                                    getReleaseStatusBadge(booking);
-                                  const StatusIcon = statusBadge.icon;
-                                  const isProcessingPayout =
-                                    booking.paymentStatus ===
-                                    "PROCESSING_PAYOUT";
-
-                                  // ✅ Check if this is a bulk child
-                                  const isBulkChild =
-                                    booking.hasParentPayout === true ||
-                                    booking.pendingPayouts?.some(
-                                      (p) => p.parentPayoutId !== null,
-                                    ) ||
-                                    false;
-
-                                  // ✅ Only show individual confirm if NOT a bulk child
-                                  const showIndividualConfirm =
-                                    isProcessingPayout &&
-                                    booking.pendingPayouts &&
-                                    booking.pendingPayouts.length > 0 &&
-                                    !isBulkChild;
-
-                                  return (
-                                    <div
-                                      key={booking.id}
-                                      className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/30 rounded-lg px-3 py-2"
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        <UserIcon className="h-4 w-4 text-gray-400" />
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">
-                                          {booking.customerName}
-                                        </span>
-                                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                                          #{booking.ticketNumber}
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-3">
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                          NPR{" "}
-                                          {booking.totalAmount.toLocaleString()}
-                                        </span>
-                                        <span
-                                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge.color}`}
-                                        >
-                                          <StatusIcon
-                                            className={`h-3 w-3 mr-1 ${isProcessingPayout ? "animate-spin" : ""}`}
-                                          />
-                                          {statusBadge.text}
-                                        </span>
-                                        {!isProcessingPayout &&
-                                          booking.canRelease && (
-                                            <button
-                                              onClick={() =>
-                                                openReleaseModal(
-                                                  booking,
-                                                  "ticket",
-                                                )
-                                              }
-                                              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                                            >
-                                              Release
-                                            </button>
-                                          )}
-                                        {/* ✅ Only show individual confirm for non-bulk tickets */}
-                                        {showIndividualConfirm && (
-                                          <button
-                                            onClick={() =>
-                                              openVerifyModal(
-                                                booking.pendingPayouts[0],
-                                              )
-                                            }
-                                            className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
-                                          >
-                                            Confirm
-                                          </button>
-                                        )}
-                                        {/* ✅ Show bulk badge for bulk tickets */}
-                                        {isProcessingPayout && isBulkChild && (
-                                          <span className="text-xs text-gray-400">
-                                            (Bulk)
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+        {/* Awaiting Vendor Approval Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-8">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -1229,6 +958,17 @@ export default function AdminEscrowPage() {
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
             Deposit paid, waiting for vendor
           </p>
+        </div>
+
+        {/* ============================================ */}
+        {/* SECTION 3: Manage Bookings */}
+        {/* ============================================ */}
+        <div className="flex items-center gap-3 mb-4 mt-8">
+          <DocumentTextIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Manage Bookings
+          </h2>
+          <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
         </div>
 
         {/* Filters */}
@@ -1339,19 +1079,7 @@ export default function AdminEscrowPage() {
                     booking.type === "VENDOR"
                       ? getVendorStatusBadge(booking)
                       : null;
-                  const canReleaseDeposit =
-                    booking.availableActions?.includes("RELEASE_DEPOSIT");
-                  const canReleaseRemaining =
-                    booking.availableActions?.includes("RELEASE_REMAINING");
-                  const depositDisabled =
-                    !canReleaseDeposit &&
-                    booking.customerPaidDeposit &&
-                    !booking.hasDepositPayout &&
-                    !isProcessingPayout;
-                  const depositDisabledReason =
-                    booking.depositReleaseDisabledReason;
 
-                  // ✅ Check if this is a bulk child
                   const isBulkChild =
                     booking.hasParentPayout === true ||
                     booking.pendingPayouts?.some(
@@ -1359,7 +1087,6 @@ export default function AdminEscrowPage() {
                     ) ||
                     false;
 
-                  // ✅ Only show individual confirm if NOT a bulk child
                   const showIndividualConfirm =
                     isProcessingPayout &&
                     booking.pendingPayouts &&
@@ -1419,16 +1146,18 @@ export default function AdminEscrowPage() {
 
                       {/* Amount column */}
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-green-600 dark:text-green-400">
+                        <p className="font-semibold text-green-600">
                           NPR{" "}
-                          {(booking.type === "VENDOR"
-                            ? booking.depositAmount
-                            : booking.totalAmount
+                          {(
+                            booking.displayAmount || booking.totalAmount
                           )?.toLocaleString()}
                         </p>
                         {booking.type === "VENDOR" &&
                           booking.remainingAmount &&
-                          !booking.hasRemainingPayout && (
+                          !booking.hasRemainingPayout &&
+                          booking.vendorPaymentStatus !== "FULLY_PAID" &&
+                          booking.vendorPaymentStatus !==
+                            "PROCESSING_PAYOUT" && (
                             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                               Remaining: NPR{" "}
                               {booking.remainingAmount.toLocaleString()}
@@ -1440,9 +1169,9 @@ export default function AdminEscrowPage() {
                       <td className="px-6 py-4">
                         <p className="text-sm text-purple-600 dark:text-purple-400">
                           NPR{" "}
-                          {(booking.type === "VENDOR"
-                            ? (booking.depositAmount || 0) * 0.1
-                            : booking.platformCommission
+                          {(
+                            booking.displayCommission ||
+                            (booking.depositAmount || 0) * 0.1
                           )?.toLocaleString()}
                         </p>
                         <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -1479,6 +1208,7 @@ export default function AdminEscrowPage() {
                       {/* Actions column */}
                       <td className="px-6 py-4">
                         <div className="flex gap-2 flex-wrap">
+                          {/* View Details Button */}
                           <button
                             onClick={() => openViewModal(booking)}
                             className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -1487,41 +1217,44 @@ export default function AdminEscrowPage() {
                             Details
                           </button>
 
-                          {/* Release Deposit Button */}
-                          {canReleaseDeposit && (
+                          {/* ─── RELEASE DEPOSIT ──────────────────────────────────────── */}
+                          {/* Scenario 1: DEPOSIT_PAID */}
+                          {booking.availableActions?.includes(
+                            "RELEASE_DEPOSIT",
+                          ) && (
                             <button
                               onClick={() =>
                                 openReleaseModal(booking, "deposit")
                               }
                               disabled={releasingId === booking.id}
-                              className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-                              title={depositDisabledReason || ""}
+                              className="px-3 py-1.5 text-sm rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                              title={booking.depositReleaseDisabledReason || ""}
                             >
+                              <BanknotesIcon className="h-4 w-4 inline mr-1" />
                               Release Deposit
                             </button>
                           )}
 
-                          {/* Disabled deposit button */}
-                          {depositDisabled &&
-                            !canReleaseDeposit &&
-                            !isProcessingPayout && (
-                              <div className="relative group">
-                                <button
-                                  disabled
-                                  className="px-3 py-1.5 text-sm rounded-lg bg-gray-400 text-white cursor-not-allowed"
-                                >
-                                  Release Deposit
-                                </button>
-                                {depositDisabledReason && (
-                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                    {depositDisabledReason}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                          {/* ─── RELEASE FULL ────────────────────────────────────────── */}
+                          {/* Scenario 2: FULLY_PAID + No releases */}
+                          {booking.availableActions?.includes(
+                            "RELEASE_FULL",
+                          ) && (
+                            <button
+                              onClick={() => openReleaseModal(booking, "all")}
+                              disabled={releasingId === booking.id}
+                              className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                            >
+                              <BanknotesIcon className="h-4 w-4 inline mr-1" />
+                              Release Full Amount
+                            </button>
+                          )}
 
-                          {/* Release Remaining Button */}
-                          {canReleaseRemaining && (
+                          {/* ─── RELEASE REMAINING ───────────────────────────────────── */}
+                          {/* Scenario 3: FULLY_PAID + Deposit already released */}
+                          {booking.availableActions?.includes(
+                            "RELEASE_REMAINING",
+                          ) && (
                             <button
                               onClick={() =>
                                 openReleaseModal(booking, "remaining")
@@ -1529,31 +1262,30 @@ export default function AdminEscrowPage() {
                               disabled={releasingId === booking.id}
                               className="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                             >
+                              <CurrencyRupeeIcon className="h-4 w-4 inline mr-1" />
                               Release Remaining
                             </button>
                           )}
 
-                          {/* ✅ Confirm Transfer Button - Only for individual tickets (not bulk children) */}
-                          {showIndividualConfirm && (
+                          {/* ─── RELEASE TICKET ───────────────────────────────────────── */}
+                          {booking.type === "TICKET" && (
                             <button
-                              onClick={() => {
-                                if (
-                                  booking.pendingPayouts &&
-                                  booking.pendingPayouts.length > 0
-                                ) {
-                                  openVerifyModal(booking.pendingPayouts[0]);
-                                }
-                              }}
-                              className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                              onClick={() =>
+                                openReleaseModal(booking, "ticket")
+                              }
+                              disabled={!booking.canRelease}
+                              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                                !booking.canRelease
+                                  ? "bg-gray-400 dark:bg-gray-600 text-white cursor-not-allowed"
+                                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+                              }`}
                             >
-                              <CheckCircleIcon className="h-4 w-4 inline mr-1" />
-                              Confirm Transfer
+                              Release Funds
                             </button>
                           )}
 
-                          {/* ✅ NEW: Confirm Transfer Button for Vendor Bookings */}
-                          {booking.type === "VENDOR" &&
-                            isProcessingPayout &&
+                          {/* ─── CONFIRM TRANSFER ────────────────────────────────────── */}
+                          {booking.paymentStatus === "PROCESSING_PAYOUT" &&
                             booking.pendingPayouts &&
                             booking.pendingPayouts.length > 0 && (
                               <button
@@ -1571,23 +1303,6 @@ export default function AdminEscrowPage() {
                                 Confirm Transfer
                               </button>
                             )}
-
-                          {/* Ticket Release Button */}
-                          {booking.type === "TICKET" && (
-                            <button
-                              onClick={() =>
-                                openReleaseModal(booking, "ticket")
-                              }
-                              disabled={!booking.canRelease}
-                              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                                !booking.canRelease
-                                  ? "bg-gray-400 dark:bg-gray-600 text-white cursor-not-allowed"
-                                  : "bg-indigo-600 text-white hover:bg-indigo-700"
-                              }`}
-                            >
-                              Release Funds
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -1640,7 +1355,7 @@ export default function AdminEscrowPage() {
                       </h3>
 
                       <div className="mt-4 space-y-3">
-                        {/* Status Badge */}
+                        {/* ─── STATUS BADGE ────────────────────────────────────── */}
                         {(() => {
                           const statusBadge =
                             getReleaseStatusBadge(selectedBooking);
@@ -1662,7 +1377,7 @@ export default function AdminEscrowPage() {
                           );
                         })()}
 
-                        {/* Event Info */}
+                        {/* ─── EVENT INFO ──────────────────────────────────────── */}
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
                           <p className="text-sm text-gray-500 dark:text-gray-400">
                             Event
@@ -1680,7 +1395,7 @@ export default function AdminEscrowPage() {
                           </div>
                         </div>
 
-                        {/* Vendor/Organizer */}
+                        {/* ─── VENDOR/ORGANIZER ────────────────────────────────── */}
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
                           <p className="text-sm text-gray-500 dark:text-gray-400">
                             {selectedBooking.type === "VENDOR"
@@ -1703,7 +1418,7 @@ export default function AdminEscrowPage() {
                             )}
                         </div>
 
-                        {/* Customer Info */}
+                        {/* ─── CUSTOMER INFO ───────────────────────────────────── */}
                         <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
                           <p className="text-sm text-gray-500 dark:text-gray-400">
                             Customer
@@ -1716,7 +1431,7 @@ export default function AdminEscrowPage() {
                           </p>
                         </div>
 
-                        {/* Payment Breakdown */}
+                        {/* ─── PAYMENT BREAKDOWN ───────────────────────────────── */}
                         <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2">
                           <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">
@@ -1764,34 +1479,136 @@ export default function AdminEscrowPage() {
                                 </span>
                               </div>
 
-                              {!selectedBooking.customerPaidFull && (
+                              {/* ✅ FIXED: Remaining Payment Status */}
+                              {selectedBooking.vendorPaymentStatus ===
+                                "DEPOSIT_PAID" &&
+                                !selectedBooking.customerPaidFull && (
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                      Remaining Payment Status:
+                                    </span>
+                                    <span className="text-red-600 dark:text-red-400">
+                                      Not Paid Yet
+                                    </span>
+                                  </div>
+                                )}
+                              {(selectedBooking.vendorPaymentStatus ===
+                                "FULLY_PAID" ||
+                                selectedBooking.vendorPaymentStatus ===
+                                  "PROCESSING_PAYOUT") && (
                                 <div className="flex justify-between">
                                   <span className="text-gray-600 dark:text-gray-400">
                                     Remaining Payment Status:
                                   </span>
-                                  <span className="text-red-600 dark:text-red-400">
-                                    Not Paid Yet
+                                  <span className="text-green-600 dark:text-green-400">
+                                    ✅ Paid
                                   </span>
                                 </div>
                               )}
                             </>
                           )}
 
+                          {/* ✅ FIXED: Platform Fee - shows 10% of total for FULLY_PAID or PROCESSING_PAYOUT */}
                           <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span className="text-gray-600 dark:text-gray-400">
                               Platform Fee (10%):
                             </span>
                             <span className="text-purple-600 dark:text-purple-400">
                               -NPR{" "}
-                              {(selectedBooking.type === "VENDOR"
-                                ? (selectedBooking.depositAmount || 0) * 0.1
-                                : selectedBooking.platformCommission
-                              )?.toLocaleString()}
+                              {(() => {
+                                let amount = 0;
+                                if (selectedBooking.type === "VENDOR") {
+                                  // ✅ For FULLY_PAID or PROCESSING_PAYOUT, use total amount
+                                  if (
+                                    selectedBooking.vendorPaymentStatus ===
+                                      "FULLY_PAID" ||
+                                    selectedBooking.vendorPaymentStatus ===
+                                      "PROCESSING_PAYOUT"
+                                  ) {
+                                    amount = selectedBooking.totalAmount || 0;
+                                  } else {
+                                    amount = selectedBooking.depositAmount || 0;
+                                  }
+                                } else {
+                                  amount = selectedBooking.totalAmount || 0;
+                                }
+                                return Math.round(
+                                  amount * 0.1,
+                                ).toLocaleString();
+                              })()}
                             </span>
                           </div>
                         </div>
 
-                        {/* Warning Messages */}
+                        {/* ─── WARNING MESSAGES ────────────────────────────────── */}
+
+                        {/* ✅ CASE 1: DEPOSIT PAID + NOT FULLY PAID → Show Deposit Ready */}
+                        {selectedBooking.type === "VENDOR" &&
+                          !selectedBooking.hasDepositPayout &&
+                          selectedBooking.customerPaidDeposit &&
+                          selectedBooking.vendorPaymentStatus !==
+                            "FULLY_PAID" &&
+                          selectedBooking.vendorPaymentStatus !==
+                            "PROCESSING_PAYOUT" && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                              <div className="flex items-start">
+                                <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
+                                    Deposit Ready for Release
+                                  </p>
+                                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
+                                    Customer has paid the deposit. You can now
+                                    release the deposit to the vendor.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                        {/* ✅ CASE 2: FULLY_PAID + NO RELEASES → Show Fully Paid - Ready */}
+                        {selectedBooking.type === "VENDOR" &&
+                          selectedBooking.vendorPaymentStatus ===
+                            "FULLY_PAID" &&
+                          !selectedBooking.hasDepositPayout &&
+                          !selectedBooking.hasRemainingPayout && (
+                            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                              <div className="flex items-start">
+                                <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                                    Fully Paid - Ready to Release
+                                  </p>
+                                  <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+                                    Customer has paid the full amount. You can
+                                    release the full amount to the vendor.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                        {/* ✅ CASE 3: PROCESSING PAYOUT (AFTER RELEASE) → Show Processing */}
+                        {selectedBooking.type === "VENDOR" &&
+                          selectedBooking.paymentStatus ===
+                            "PROCESSING_PAYOUT" && (
+                            <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
+                              <div className="flex items-start">
+                                <ArrowPathIcon className="h-5 w-5 text-purple-600 dark:text-purple-400 mr-2 flex-shrink-0 mt-0.5 animate-spin" />
+                                <div>
+                                  <p className="text-sm font-medium text-purple-700 dark:text-purple-400">
+                                    Processing Payment
+                                  </p>
+                                  <p className="text-xs text-purple-600 dark:text-purple-500 mt-1">
+                                    Funds have been released and are awaiting
+                                    admin confirmation of manual transfer.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                        {/* ✅ CASE 4: DEPOSIT RELEASED, AWAITING REMAINING */}
                         {selectedBooking.type === "VENDOR" &&
                           selectedBooking.hasDepositPayout &&
                           !selectedBooking.customerPaidFull && (
@@ -1813,38 +1630,21 @@ export default function AdminEscrowPage() {
                             </div>
                           )}
 
-                        {selectedBooking.type === "VENDOR" &&
-                          !selectedBooking.hasDepositPayout &&
-                          selectedBooking.customerPaidDeposit && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                              <div className="flex items-start">
-                                <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
-                                    Deposit Ready for Release
-                                  </p>
-                                  <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
-                                    Customer has paid the deposit. You can now
-                                    release the deposit to the vendor.
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
+                        {/* ✅ CASE 5: DEPOSIT RELEASED, REMAINING READY */}
                         {selectedBooking.type === "VENDOR" &&
                           selectedBooking.customerPaidFull &&
+                          selectedBooking.hasDepositPayout &&
                           !selectedBooking.hasRemainingPayout && (
-                            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg">
                               <div className="flex items-start">
-                                <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2 flex-shrink-0 mt-0.5" />
+                                <CheckCircleIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2 flex-shrink-0 mt-0.5" />
                                 <div>
-                                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                                    Fully Paid - Ready to Release
+                                  <p className="text-sm font-medium text-indigo-700 dark:text-indigo-400">
+                                    Ready to Release Remaining
                                   </p>
-                                  <p className="text-xs text-green-600 dark:text-green-500 mt-1">
-                                    Customer has paid the full amount. You can
-                                    now release the remaining funds to the
+                                  <p className="text-xs text-indigo-600 dark:text-indigo-500 mt-1">
+                                    Customer has paid the remaining amount. You
+                                    can now release the remaining funds to the
                                     vendor.
                                   </p>
                                 </div>
@@ -1852,6 +1652,25 @@ export default function AdminEscrowPage() {
                             </div>
                           )}
 
+                        {/* ✅ CASE 6: FULLY RELEASED */}
+                        {selectedBooking.type === "VENDOR" &&
+                          selectedBooking.hasRemainingPayout && (
+                            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                              <div className="flex items-start">
+                                <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                                    ✅ Fully Released
+                                  </p>
+                                  <p className="text-xs text-green-600 dark:text-green-500 mt-1">
+                                    All funds have been released to the vendor.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                        {/* Ticket Event Completed */}
                         {selectedBooking.type === "TICKET" &&
                           selectedBooking.isCompleted && (
                             <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
@@ -1919,7 +1738,9 @@ export default function AdminEscrowPage() {
                           ? "Release Ticket Funds"
                           : modalAction === "deposit"
                             ? "Release Deposit Funds"
-                            : "Release Remaining Funds"}
+                            : modalAction === "all"
+                              ? "Release Full Amount"
+                              : "Release Remaining Funds"}
                       </h3>
 
                       <div className="mt-4 space-y-3">
@@ -1999,7 +1820,7 @@ export default function AdminEscrowPage() {
                             </>
                           )}
 
-                          {/* Amount to Release - CALCULATED BASED ON TYPE */}
+                          {/* Amount to Release */}
                           <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span className="font-semibold text-gray-900 dark:text-white">
                               Amount to Release:
@@ -2012,6 +1833,8 @@ export default function AdminEscrowPage() {
                                   amount = selectedBooking.totalAmount || 0;
                                 } else if (modalAction === "deposit") {
                                   amount = selectedBooking.depositAmount || 0;
+                                } else if (modalAction === "all") {
+                                  amount = selectedBooking.totalAmount || 0;
                                 } else {
                                   amount = selectedBooking.remainingAmount || 0;
                                 }
@@ -2033,6 +1856,8 @@ export default function AdminEscrowPage() {
                                   amount = selectedBooking.totalAmount || 0;
                                 } else if (modalAction === "deposit") {
                                   amount = selectedBooking.depositAmount || 0;
+                                } else if (modalAction === "all") {
+                                  amount = selectedBooking.totalAmount || 0;
                                 } else {
                                   amount = selectedBooking.remainingAmount || 0;
                                 }
@@ -2059,6 +1884,8 @@ export default function AdminEscrowPage() {
                                   amount = selectedBooking.totalAmount || 0;
                                 } else if (modalAction === "deposit") {
                                   amount = selectedBooking.depositAmount || 0;
+                                } else if (modalAction === "all") {
+                                  amount = selectedBooking.totalAmount || 0;
                                 } else {
                                   amount = selectedBooking.remainingAmount || 0;
                                 }
@@ -2105,6 +1932,8 @@ export default function AdminEscrowPage() {
                         amount = selectedBooking.totalAmount || 0;
                       } else if (modalAction === "deposit") {
                         amount = selectedBooking.depositAmount || 0;
+                      } else if (modalAction === "all") {
+                        amount = selectedBooking.totalAmount || 0;
                       } else {
                         amount = selectedBooking.remainingAmount || 0;
                       }

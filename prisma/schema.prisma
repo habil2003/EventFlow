@@ -324,7 +324,7 @@ model VendorBooking {
   depositPaidAt        DateTime?
   remainingPaidAt      DateTime?
   amountReleasedAt     DateTime?
-  customerConfirmed    Boolean   @default(false)   // ← KEEP ONLY ONE
+  customerConfirmed    Boolean   @default(false)
   vendorMarkedComplete Boolean   @default(false)
   refundEligible       Boolean   @default(true)
 
@@ -475,36 +475,29 @@ model VendorUnavailableDate {
 
 model Rating {
   id          String     @id @default(cuid())
-  rating      Int        // 1-5 stars
-  review      String?    // Optional text review
-  type        RatingType // VENDOR or EVENT
+  rating      Int
+  review      String?
+  type        RatingType
 
-  // Who gave the rating
   userId      String
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // For vendor ratings
   vendorId    String?
   vendor      VendorProfile? @relation("vendorRatings", fields: [vendorId], references: [id], onDelete: Cascade)
 
-  // For event ratings
   eventId     String?
   event       TicketedEvent? @relation("eventRatings", fields: [eventId], references: [id], onDelete: Cascade)
 
-  // Link to booking (for verification)
   vendorBookingId String?
   vendorBooking   VendorBooking? @relation("bookingRatings", fields: [vendorBookingId], references: [id], onDelete: SetNull)
 
   ticketBookingId String?
   ticketBooking   TicketBooking? @relation("ticketRatings", fields: [ticketBookingId], references: [id], onDelete: SetNull)
 
-  // Verification - only verified purchases can review
   isVerified  Boolean  @default(false)
-
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Prevent duplicate reviews
   @@unique([userId, vendorId, vendorBookingId])
   @@unique([userId, eventId, ticketBookingId])
   @@index([vendorId])

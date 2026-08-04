@@ -17,7 +17,7 @@ import {
   XMarkIcon,
   ClockIcon,
   BanknotesIcon
-} from '@heroicons/react/24/outline';
+} from '@heroicons/react/24/outline'; 
 import { useState, useEffect } from 'react';
 
 export default function Navigation() {
@@ -43,9 +43,12 @@ export default function Navigation() {
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
 
-  // Only hide on auth pages
+  // ✅ FIXED: Removed '/dashboard' from hidden paths
   const authPages = ['/login', '/signup', '/verify-email', '/forgot-password', '/reset-password'];
-  const shouldHideNav = authPages.includes(pathname);
+  const shouldHideNav = authPages.includes(pathname) || 
+    pathname?.startsWith('/admin') || 
+    pathname?.startsWith('/organizer') || 
+    pathname?.startsWith('/vendor');
 
   if (!mounted || shouldHideNav) {
     return null;
@@ -137,19 +140,14 @@ export default function Navigation() {
 
   const navLinks = getNavLinks();
 
-  // ✅ FIXED: Active state detection
   const isActive = (href: string) => {
     if (href === '/') return pathname === href;
     
-    // Dashboard routes - exact match only (don't highlight for child pages)
     const dashboardRoutes = ['/admin', '/vendor', '/organizer', '/dashboard'];
     if (dashboardRoutes.includes(href)) {
       return pathname === href;
     }
     
-    // For all other routes, check if current path matches or starts with href
-    // This makes /admin/refunds active for href="/admin/refunds"
-    // And /admin/refunds/123 active for href="/admin/refunds"
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
