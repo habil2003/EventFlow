@@ -5,6 +5,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type TicketTierBody = {
+  id?: string;
+  name: string;
+  price: number;
+  quantity: number;
+};
+
 // GET - Fetch single event for organizer
 export async function GET(
   request: NextRequest,
@@ -173,7 +180,7 @@ export async function PUT(
     }
 
     // Validate total tickets don't exceed capacity
-    const totalTickets = ticketTiers.reduce((sum: number, tier: any) => sum + tier.quantity, 0);
+    const totalTickets = ticketTiers.reduce((sum: number, tier: TicketTierBody) => sum + tier.quantity, 0);
     if (totalTickets > numericCapacity) {
       return NextResponse.json(
         { error: `Total tickets (${totalTickets}) exceed event capacity (${numericCapacity})` },
@@ -223,8 +230,8 @@ export async function PUT(
       // Handle ticket tiers
       const existingTierIds = existingEvent.ticketTiers.map(t => t.id);
       const updatedTierIds = ticketTiers
-        .filter((t: any) => t.id)
-        .map((t: any) => t.id);
+        .filter((t: TicketTierBody) => t.id)
+        .map((t: TicketTierBody) => t.id);
 
       // Delete tiers that were removed (only if no sold tickets)
       const tiersToDelete = existingTierIds.filter(

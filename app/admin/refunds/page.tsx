@@ -24,6 +24,32 @@ import {
     InformationCircleIcon,
 } from '@heroicons/react/24/outline';
 
+interface GatewayResponse {
+    method?: string;
+    processedBy?: string;
+    processedAt?: string;
+    refundPercentage?: number;
+    daysUntilEvent?: number;
+    khaltiFee?: number;
+    platformKeeps?: number;
+    originalTxId?: string;
+    khaltiResponse?: {
+        detail?: string;
+    };
+    message?: string;
+    adminNotes?: string;
+    transferMethod?: string;
+    transactionReference?: string;
+    proofImageUrl?: string;
+    depositAmount?: number;
+    cancelledBy?: string;
+    reason?: string;
+    cancelledAt?: string;
+    error?: string;
+    attemptedAt?: string;
+    [key: string]: unknown;
+}
+
 interface Refund {
     id: string;
     originalTransactionId: string;
@@ -31,7 +57,7 @@ interface Refund {
     refundReason: string;
     refundStatus: string;
     gatewayRefundId: string | null;
-    gatewayResponse: any;
+    gatewayResponse: GatewayResponse;
     createdAt: string;
     processedAt: string | null;
     cancelledBy?: string;
@@ -277,7 +303,7 @@ export default function AdminRefundsPage() {
             }
             
             // Manual Refund (Bank, Cash, Cheque, etc.)
-            if (gatewayResponse.method === "MANUAL" || ["BANK_TRANSFER", "CASH", "CHEQUE", "KHALTI_MANUAL"].includes(gatewayResponse.transferMethod)) {
+            if (gatewayResponse.method === "MANUAL" || ["BANK_TRANSFER", "CASH", "CHEQUE", "KHALTI_MANUAL"].includes(gatewayResponse.transferMethod!)) {
                 const methodNames: Record<string, string> = {
                     "BANK_TRANSFER": "Bank Transfer",
                     "CASH": "Cash",
@@ -287,7 +313,7 @@ export default function AdminRefundsPage() {
                 };
                 
                 return {
-                    title: `Manual Refund: ${methodNames[gatewayResponse.transferMethod] || "Manual"}`,
+                    title: `Manual Refund: ${methodNames[gatewayResponse.transferMethod!] || "Manual"}`,
                     icon: BuildingOfficeIcon,
                     color: "blue",
                     details: [
@@ -372,7 +398,7 @@ export default function AdminRefundsPage() {
         };
     };
 
-    const getRefundSummary = (gatewayResponse: any, refundStatus: string) => {
+    const getRefundSummary = (gatewayResponse: GatewayResponse | null, refundStatus: string) => {
         if (!gatewayResponse) {
             if (refundStatus === "PENDING_ADMIN") return "Pending admin review";
             return "No additional data";
@@ -389,7 +415,7 @@ export default function AdminRefundsPage() {
                     "CHEQUE": "Cheque",
                     "KHALTI_MANUAL": "Khalti Manual",
                 };
-                const methodName = methods[gatewayResponse.transferMethod] || "Manual";
+                const methodName = methods[gatewayResponse.transferMethod!] || "Manual";
                 const reference = gatewayResponse.transactionReference || "N/A";
                 return `${methodName} - Ref: ${reference}`;
             }
@@ -454,7 +480,7 @@ export default function AdminRefundsPage() {
                 <div className="text-center">
                     <XCircleIcon className="h-16 w-16 text-red-500 mx-auto mb-4" />
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Access Denied</h1>
-                    <p className="mt-2 text-gray-500">You don't have permission to view this page.</p>
+                    <p className="mt-2 text-gray-500">You don&apos;t have permission to view this page.</p>
                     <Link href="/" className="mt-4 inline-block text-indigo-600 hover:underline">
                         Go back home
                     </Link>

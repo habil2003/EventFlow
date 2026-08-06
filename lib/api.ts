@@ -31,7 +31,7 @@ export function getApiBaseUrl(): string {
 /**
  * API Response type
  */
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success?: boolean;
   error?: string;
   message?: string;
@@ -39,7 +39,7 @@ export interface ApiResponse<T = any> {
   requiresApproval?: boolean;
   emailSent?: boolean;
   role?: string;
-  user?: any;
+  user?: unknown;
   requiresVerification?: boolean;
 }
 
@@ -76,12 +76,12 @@ export async function handleApiResponse<T>(response: Response): Promise<T> {
  * API client with methods - TYPED VERSION
  */
 export const api = {
-  get: async <T = any>(endpoint: string, options?: RequestInit): Promise<T> => {
+  get: async <T = unknown>(endpoint: string, options?: RequestInit): Promise<T> => {
     const response = await apiFetch(endpoint, { ...options, method: 'GET' });
     return handleApiResponse<T>(response);
   },
   
-  post: async <T = any>(endpoint: string, data?: any, options?: RequestInit): Promise<T> => {
+  post: async <T = unknown>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> => {
     const response = await apiFetch(endpoint, {
       ...options,
       method: 'POST',
@@ -90,7 +90,7 @@ export const api = {
     return handleApiResponse<T>(response);
   },
   
-  put: async <T = any>(endpoint: string, data?: any, options?: RequestInit): Promise<T> => {
+  put: async <T = unknown>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> => {
     const response = await apiFetch(endpoint, {
       ...options,
       method: 'PUT',
@@ -99,7 +99,7 @@ export const api = {
     return handleApiResponse<T>(response);
   },
   
-  delete: async <T = any>(endpoint: string, options?: RequestInit): Promise<T> => {
+  delete: async <T = unknown>(endpoint: string, options?: RequestInit): Promise<T> => {
     const response = await apiFetch(endpoint, { ...options, method: 'DELETE' });
     return handleApiResponse<T>(response);
   },

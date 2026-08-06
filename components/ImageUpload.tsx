@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { UploadButton } from "@uploadthing/react";
+import type { ClientUploadedFileData } from "uploadthing/types";
 import type { OurFileRouter } from "@/app/api/uploadthing/core";
 import { TrashIcon, PhotoIcon } from "@heroicons/react/24/outline";
 
@@ -41,7 +42,7 @@ export default function ImageUpload({
     };
   }, [imageUrl, existingImage]);
 
-  const handleUploadComplete = (res: any[]) => {
+  const handleUploadComplete = (res: ClientUploadedFileData<{ uploadedBy: string; url: string }>[]) => {
     if (res && res.length > 0) {
       if (multiple && res.length > 1) {
         const urls = res.map(file => file.ufsUrl || file.url);
@@ -56,11 +57,12 @@ export default function ImageUpload({
     setIsUploading(false);
   };
 
-  const handleUploadError = (error: any) => {
+  const handleUploadError = (error: unknown) => {
     console.error("Upload error:", error);
-    setError(error.message || "Upload failed");
+    const message = error instanceof Error ? error.message : "Upload failed";
+    setError(message);
     setIsUploading(false);
-    if (onUploadError) onUploadError(error);
+    if (onUploadError) onUploadError(error instanceof Error ? error : new Error(message));
   };
 
   const handleRemove = () => {

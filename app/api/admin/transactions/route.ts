@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma, PaymentType } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.PaymentTransactionWhereInput = {};
 
     if (search) {
       where.OR = [
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
     }
 
     if (type !== "all") {
-      where.paymentType = type;
+      where.paymentType = type as PaymentType;
     }
 
     if (status !== "all") {

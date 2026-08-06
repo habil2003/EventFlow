@@ -101,10 +101,10 @@ export async function POST(request: Request) {
     if (qrCode) {
       const cleanQrCode = qrCode.trim().replace(/[\x00-\x1F\x7F]/g, '');
       let qrHash = cleanQrCode;
-      let parsedData: any = null;
+      let parsedData: Record<string, string> | null = null;
 
       try {
-        parsedData = JSON.parse(cleanQrCode);
+        parsedData = JSON.parse(cleanQrCode) as Record<string, string>;
         console.log("📋 [CHECKIN] Parsed QR:", JSON.stringify(parsedData, null, 2));
         qrHash = parsedData.hash || parsedData.qrCodeHash || parsedData.ticketId || cleanQrCode;
       } catch {

@@ -116,6 +116,7 @@ function VendorDetailContent() {
 
   useEffect(() => {
     if (existingEventTitle) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEventTitle(decodeURIComponent(existingEventTitle));
     }
     if (existingEventDate) {
@@ -168,6 +169,7 @@ function VendorDetailContent() {
         const images = [];
         if (pkg.imageUrl) images.push(pkg.imageUrl);
         if (pkg.galleryImages) images.push(...pkg.galleryImages);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedPackageImages(images);
         setCurrentImageIndex(0);
       }
@@ -180,13 +182,14 @@ function VendorDetailContent() {
         (p) => p.id === selectedPackage,
       );
       if (selectedPkg) {
-        let guestCountNum = parseInt(existingGuestCount);
+        const guestCountNum = parseInt(existingGuestCount);
         if (!isNaN(guestCountNum) && guestCountNum > 0) {
           const minGuests = selectedPkg.minGuests || 1;
           const maxGuests = selectedPkg.maxGuests || 10000;
           let validCount = guestCountNum;
           if (validCount < minGuests) validCount = minGuests;
           if (validCount > maxGuests) validCount = maxGuests;
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setGuestCount(validCount);
           setGuestCountInput(validCount.toString());
         }
@@ -885,8 +888,8 @@ function VendorDetailContent() {
                   <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                     <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
                       <InformationCircleIcon className="h-4 w-4" />
-                      Event details pre-filled from "
-                      {decodeURIComponent(existingEventTitle)}"
+                      Event details pre-filled from &quot;
+                      {decodeURIComponent(existingEventTitle)}&quot;
                     </p>
                   </div>
                 )}
@@ -919,7 +922,7 @@ function VendorDetailContent() {
                     )}
                     {!isPerPerson && (
                       <p className="text-xs text-gray-400">
-                        Fixed price (guest count doesn't affect total)
+                        Fixed price (guest count doesn&apos;t affect total)
                       </p>
                     )}
                   </div>

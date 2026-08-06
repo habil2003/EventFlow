@@ -81,9 +81,9 @@ export async function GET() {
       }
 
       // ✅ 1. Check if percentage is in gatewayResponse
-      const gatewayResponse = refund.gatewayResponse as any;
-      if (gatewayResponse?.refundPercentage !== undefined && gatewayResponse?.refundPercentage !== null) {
-        refundPercentage = gatewayResponse.refundPercentage;
+      const gatewayRefundPercentage = (refund.gatewayResponse as unknown as { refundPercentage?: number } | null)?.refundPercentage;
+      if (gatewayRefundPercentage !== undefined && gatewayRefundPercentage !== null) {
+        refundPercentage = gatewayRefundPercentage;
       }
 
       // ✅ 2. Calculate from amounts

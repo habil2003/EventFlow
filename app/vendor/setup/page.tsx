@@ -49,7 +49,7 @@ export default function VendorSetupPage() {
   const [maxGuests, setMaxGuests] = useState<string>("");
 
   // NEW: Service Details (JSON object)
-  const [serviceDetails, setServiceDetails] = useState<any>({});
+  const [serviceDetails, setServiceDetails] = useState<Record<string, unknown>>({});
 
   // Add-ons
   const [addOns, setAddOns] = useState<AddOn[]>([
@@ -58,6 +58,7 @@ export default function VendorSetupPage() {
 
   // Theme management
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;

@@ -1,6 +1,7 @@
 // app/api/events/route.ts - Add galleryImages to response
 
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -10,7 +11,7 @@ export async function GET(request: Request) {
     const exclude = url.searchParams.get("exclude");
     const search = url.searchParams.get("search") || "";
     
-    const where: any = {
+    const where: Prisma.TicketedEventWhereInput = {
       eventDate: {
         gte: new Date(),
       },

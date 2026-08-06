@@ -102,6 +102,7 @@ export default function EditEventPage() {
 
   // Theme management
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -146,7 +147,7 @@ export default function EditEventPage() {
         setGalleryImages(data.galleryImages || []);
 
         if (data.ticketTiers) {
-          setTicketTiers(data.ticketTiers.map((tier: any) => ({
+          setTicketTiers(data.ticketTiers.map((tier: TicketTier) => ({
             id: tier.id,
             name: tier.name,
             price: tier.price,
@@ -411,7 +412,7 @@ export default function EditEventPage() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-12">
             <ExclamationTriangleIcon className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Event Not Found</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">The event you're trying to edit doesn't exist.</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">The event you&apos;re trying to edit doesn&apos;t exist.</p>
             <Link href="/organizer/events" className="mt-6 inline-block px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
               Back to My Events
             </Link>

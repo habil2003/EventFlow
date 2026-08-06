@@ -117,7 +117,7 @@ export async function POST(request: Request) {
 
     // Calculate total amount with multi-day discount
     const dailyRate = Number(selectedPackage.price);
-    let baseTotal = dailyRate * totalDays;
+    const baseTotal = dailyRate * totalDays;
     
     // Apply multi-day discount
     let discountPercent = 0;

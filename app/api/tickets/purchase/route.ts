@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { TicketReservation, PaymentTransaction } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
@@ -16,8 +17,8 @@ function generateTransactionId(): string {
 }
 
 export async function POST(request: Request) {
-  let reservation: any = null;
-  let paymentTransaction: any = null;
+  let reservation: TicketReservation | null = null;
+  let paymentTransaction: PaymentTransaction | null = null;
   let transactionId: string = "";
 
   try {
@@ -192,12 +193,12 @@ export async function POST(request: Request) {
       await prisma.$transaction(async (prisma) => {
         // Delete reservation
         await prisma.ticketReservation.delete({
-          where: { id: reservation.id }
+          where: { id: reservation!.id }
         });
         
         // Delete payment transaction
         await prisma.paymentTransaction.delete({
-          where: { id: paymentTransaction.id }
+          where: { id: paymentTransaction!.id }
         });
       });
 
@@ -219,7 +220,7 @@ export async function POST(request: Request) {
       try {
         await prisma.$transaction(async (prisma) => {
           await prisma.ticketReservation.delete({
-            where: { id: reservation.id }
+            where: { id: reservation!.id }
           });
           if (paymentTransaction) {
             await prisma.paymentTransaction.delete({

@@ -3,12 +3,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 // ────────────────────────────────────────────────────────────────────
 // GET - Admin view all disputes
 // ────────────────────────────────────────────────────────────────────
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -19,7 +20,7 @@ export async function GET() {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const where: any = {};
+    const where: Prisma.DisputeWhereInput = {};
     if (status && status !== 'ALL') {
       where.status = status;
     }

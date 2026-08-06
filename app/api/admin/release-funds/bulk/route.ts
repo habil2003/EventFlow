@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -107,7 +108,7 @@ async function releaseSingleTicketFunds(
   }
 
   // Create individual payout record linked to parent
-  const payoutData: any = {
+  const payoutData: Prisma.PayoutUncheckedCreateInput = {
     ticketBookingId: ticketBooking.id,
     vendorId: organizerVendorProfile.id,
     amount: totalAmount,
@@ -333,11 +334,11 @@ export async function POST(request: Request) {
         );
         results.push(result);
         successCount++;
-      } catch (error: any) {
+      } catch (error) {
         console.error(`Error releasing booking ${booking.id}:`, error);
         errors.push({
           bookingId: booking.id,
-          error: error.message || "Unknown error occurred",
+          error: error instanceof Error ? error.message : "Unknown error occurred",
         });
       }
     }

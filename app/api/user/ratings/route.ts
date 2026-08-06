@@ -2,10 +2,11 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma, RatingType } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
@@ -19,12 +20,12 @@ export async function GET() {
     const skip = (page - 1) * limit;
     const type = searchParams.get("type"); // Optional filter: VENDOR or EVENT
 
-    const where: any = {
+    const where: Prisma.RatingWhereInput = {
       userId: session.user.id,
     };
 
     if (type && (type === "VENDOR" || type === "EVENT")) {
-      where.type = type as any;
+      where.type = type as RatingType;
     }
 
     const [ratings, total] = await Promise.all([

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma, AccountStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAppUrl } from "@/lib/app-url"; // ✅ Import getAppUrl
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     console.log('📍 [admin-update] App URL:', appUrl);
 
     // Prepare update data - also update role if approving
-    const updateData: any = { status: status };
+    const updateData: Prisma.UserUpdateInput = { status: status as AccountStatus };
     
     // If approving a user, also update their role to match the approval type
     if (status === "APPROVED") {

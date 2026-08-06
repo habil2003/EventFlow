@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 
 const KHALTI_FEE_PERCENT = Number(process.env.KHALTI_FEE_PERCENT || '0');
 
-function calculateRefundPercentage(eventDate: Date): number {
+export function calculateRefundPercentage(eventDate: Date): number {
   const now = new Date();
   const daysUntilEvent = Math.ceil(
     (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
@@ -17,7 +17,7 @@ function calculateRefundPercentage(eventDate: Date): number {
   return 0;
 }
 
-function calculateRefundAmount(
+export function calculateRefundAmount(
   paidAmount: number,
   khaltiFee: number,
   refundPercentage: number,
@@ -61,6 +61,10 @@ export async function POST(request: Request) {
           id: bookingId,
           userId: session.user.id,
           bookingStatus: { in: ['PENDING', 'ACCEPTED'] },
+          // ✅ SECURITY/FINANCE: Never allow cancelling a booking whose funds
+          // have already been released to the vendor — otherwise a refund
+          // could be created for money that is no longer held by the platform.
+          amountReleasedAt: null,
         },
         include: {
           paymentTransactions: {

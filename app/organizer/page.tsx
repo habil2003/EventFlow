@@ -50,6 +50,7 @@ export default function OrganizerDashboard() {
 
   useEffect(() => {
     const hour = new Date().getHours();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (hour < 12) setGreeting("Good morning");
     else if (hour < 17) setGreeting("Good afternoon");
     else setGreeting("Good evening");
@@ -152,7 +153,7 @@ export default function OrganizerDashboard() {
               {session.user?.name}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Here's what's happening with your events
+              Here&apos;s what&apos;s happening with your events
             </p>
           </div>
           <div className="mt-4 sm:mt-0">

@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyKhaltiPayment } from "@/lib/payment/khalti";
 import crypto from "crypto";
 
 async function generateTicketNumber(eventId: string): Promise<string> {
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const gatewayResponse = paymentTransaction.gatewayResponse as any;
+    const gatewayResponse = paymentTransaction.gatewayResponse as unknown as { reservationId?: string } | null;
     const reservationId = gatewayResponse?.reservationId;
 
     console.log('📍 [payment-callback] Reservation ID:', reservationId);
@@ -86,8 +87,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (status === 'Completed') {
-      console.log('✅ [payment-callback] Payment successful for transaction:', purchaseOrderId);
+    // ✅ SECURITY: Verify the payment server-side with Khalti lookup.
+    // The `status` query param is attacker-controllable, so it must never
+    // be trusted on its own. Only a successful gateway lookup can confirm
+    // that the payment actually completed.
+    const verification = pidx
+      ? await verifyKhaltiPayment(pidx)
+      : null;
+
+    const verifiedComplete =
+      verification?.success === true &&
+      verification.status === "Completed";
+
+    // Reconcile the amount Khalti actually collected against what we
+    // recorded at initiation time (prevents paying a different amount).
+    const amountMatches =
+      verification?.amount === undefined ||
+      Math.abs(Number(verification.amount) - Number(paymentTransaction.amount)) < 1;
+
+    if (verifiedComplete && amountMatches) {
+      console.log('✅ [payment-callback] Payment verified as Completed for transaction:', purchaseOrderId);
 
       if (!reservationId) {
         console.error('❌ [payment-callback] No reservation ID found in gatewayResponse');

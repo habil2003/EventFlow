@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+
+type RefundWithRelations = Prisma.RefundGetPayload<{
+  include: {
+    paymentTransaction: true;
+    vendorBooking: { include: { vendor: true; userSocialEvent: true } };
+    ticketBooking: { include: { event: true; tier: true } };
+  };
+}>;
 
 // ✅ Helper: Calculate refund percentage from amount
 function calculateRefundPercentageFromAmount(refundAmount: number, totalAmount: number): number | null {
@@ -23,7 +32,7 @@ function getRefundPercentageFromPolicy(daysUntilEvent: number): number {
 }
 
 // ✅ Helper: Calculate refund percentage for a refund
-function calculateRefundPercentage(refund: any): { percentage: number | null; daysUntilEvent: number | null } {
+function calculateRefundPercentage(refund: RefundWithRelations): { percentage: number | null; daysUntilEvent: number | null } {
   let refundPercentage: number | null = null;
   let daysUntilEvent: number | null = null;
 
@@ -48,9 +57,9 @@ function calculateRefundPercentage(refund: any): { percentage: number | null; da
   }
 
   // ✅ 1. Check if percentage is already in gatewayResponse
-  const gatewayResponse = refund.gatewayResponse as any;
-  if (gatewayResponse?.refundPercentage !== undefined && gatewayResponse?.refundPercentage !== null) {
-    refundPercentage = gatewayResponse.refundPercentage;
+  const gatewayRefundPercentage = (refund.gatewayResponse as unknown as { refundPercentage?: number } | null)?.refundPercentage;
+  if (gatewayRefundPercentage !== undefined && gatewayRefundPercentage !== null) {
+    refundPercentage = gatewayRefundPercentage;
   }
 
   // ✅ 2. Calculate from amounts

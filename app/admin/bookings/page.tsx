@@ -17,13 +17,15 @@ import {
   ArrowPathIcon,
   DocumentTextIcon,
   BuildingOfficeIcon,
-  FilterIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   ExclamationTriangleIcon,
   BanknotesIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+
+interface BookingPayout {
+  type?: string;
+  amount?: number;
+}
 
 interface Booking {
   id: string;
@@ -35,7 +37,7 @@ interface Booking {
   amount: number;
   status: string;
   date: string;
-  payouts: any[];
+  payouts: BookingPayout[];
   vendorName?: string;
   organizerName?: string;
   ticketNumber?: string;
@@ -88,6 +90,11 @@ export default function BookingsPage() {
     }
   }, [session, router]);
 
+  const showMessage = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
   // Fetch bookings
   const fetchBookings = async () => {
     setLoading(true);
@@ -112,7 +119,9 @@ export default function BookingsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refetch when filters change
@@ -122,15 +131,11 @@ export default function BookingsPage() {
     }, 500);
 
     return () => clearTimeout(debounceTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, typeFilter, statusFilter]);
 
-  const showMessage = (text: string, type: "success" | "error") => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
-  };
-
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { color: string; icon: any; label: string }> = {
+    const statusMap: Record<string, { color: string; icon: React.ComponentType<{ className?: string }>; label: string }> = {
       PENDING: {
         color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
         icon: ClockIcon,
@@ -726,7 +731,7 @@ export default function BookingsPage() {
                             Payouts ({selectedBooking.payouts.length})
                           </p>
                           <div className="mt-1 space-y-1">
-                            {selectedBooking.payouts.map((payout: any, index: number) => (
+                            {selectedBooking.payouts.map((payout, index: number) => (
                               <div key={index} className="flex justify-between text-sm">
                                 <span className="text-gray-600 dark:text-gray-400">
                                   {payout.type || "Payout"}

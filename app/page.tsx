@@ -83,6 +83,7 @@ export default function HomePage() {
 
   // Theme management
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia(
@@ -138,15 +139,29 @@ export default function HomePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const extractEvents = (data: any): Event[] => {
+        const extractEvents = (data: unknown): Event[] => {
           if (Array.isArray(data)) return data;
-          if (data?.events && Array.isArray(data.events)) return data.events;
+          if (
+            data &&
+            typeof data === "object" &&
+            "events" in data &&
+            Array.isArray(data.events)
+          ) {
+            return data.events;
+          }
           return [];
         };
 
-        const extractVendors = (data: any): Vendor[] => {
+        const extractVendors = (data: unknown): Vendor[] => {
           if (Array.isArray(data)) return data;
-          if (data?.vendors && Array.isArray(data.vendors)) return data.vendors;
+          if (
+            data &&
+            typeof data === "object" &&
+            "vendors" in data &&
+            Array.isArray(data.vendors)
+          ) {
+            return data.vendors;
+          }
           return [];
         };
 
@@ -228,7 +243,7 @@ export default function HomePage() {
               opacity: 0,
               scale: 0,
               y: -100,
-              x: (Math.random() - 0.5) * 100,
+              x: ((heart.id * 37) % 101) - 50,
             }}
             exit={{ opacity: 0 }}
             transition={{ duration: 2, ease: "easeOut" }}
@@ -298,7 +313,7 @@ export default function HomePage() {
               transition={{ duration: 1, repeat: Infinity }}
             >
             </motion.div>
-            Nepal's Premier Event Platform
+            Nepal&apos;s Premier Event Platform
           </motion.div>
 
           <motion.h1
@@ -321,7 +336,7 @@ export default function HomePage() {
             transition={{ delay: 0.3 }}
             className="mx-auto mt-4 max-w-2xl text-base text-gray-500 dark:text-gray-400 sm:text-lg"
           >
-            Nepal's first dual-module event management platform. Create ticketed
+            Nepal&apos;s first dual-module event management platform. Create ticketed
             events, book vendors, and manage everything in one place.
           </motion.p>
 
@@ -626,7 +641,7 @@ export default function HomePage() {
                   Upcoming Events
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400 mt-1">
-                  Don't miss out on these popular events
+                  Don&apos;t miss out on these popular events
                 </p>
               </div>
               <motion.div whileHover={{ x: 5 }}>
@@ -923,7 +938,7 @@ export default function HomePage() {
                     Ready to get started?
                   </h3>
                   <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    Join EventFlow today — it's free!
+                    Join EventFlow today — it&apos;s free!
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1055,7 +1070,7 @@ export default function HomePage() {
             </div>
             <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 text-center">
               <p className="text-sm text-gray-400">
-                © 2026 EventFlow — Nepal's Complete Event Management Solution.
+                © 2026 EventFlow — Nepal&apos;s Complete Event Management Solution.
                 All rights reserved.
               </p>
             </div>

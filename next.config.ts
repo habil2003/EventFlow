@@ -51,6 +51,10 @@ const nextConfig: NextConfig = {
       // ✅ Add UploadThing domains
       {
         protocol: 'https',
+        hostname: 'utfs.io',
+      },
+      {
+        protocol: 'https',
         hostname: '*.ufs.sh',
       },
       {

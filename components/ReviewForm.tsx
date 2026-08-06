@@ -42,6 +42,7 @@ export default function ReviewForm({
   // Load existing rating if editing
   useEffect(() => {
     if (existingRating) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRating(existingRating.rating);
       setReview(existingRating.review || "");
     } else {
@@ -93,8 +94,8 @@ export default function ReviewForm({
         onClose();
         setSubmitted(false);
       }, 1500);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }

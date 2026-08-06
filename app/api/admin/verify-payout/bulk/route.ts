@@ -103,9 +103,8 @@ export async function POST(request: Request) {
         parentPayoutIds.add(payout.parentPayout.id);
       }
       // Also check if bulkPayoutId is set directly
-      const payoutWithBulk = payout as any;
-      if (payoutWithBulk.bulkPayoutId) {
-        parentPayoutIds.add(payoutWithBulk.bulkPayoutId);
+      if (payout.bulkPayoutId) {
+        parentPayoutIds.add(payout.bulkPayoutId);
       }
     }
 
@@ -147,11 +146,11 @@ ${notes ? `Admin notes: ${notes}` : ''}`,
           bookingId: payout.ticketBookingId,
           success: true,
         });
-      } catch (error: any) {
+      } catch (error) {
         errors.push({
           payoutId: payout.id,
           bookingId: payout.ticketBookingId,
-          error: error.message,
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -198,11 +197,11 @@ Verified by: ${session.user.email} (${session.user.name || 'Admin'})`,
         } else {
           console.log(`⏳ Parent payout ${parentId}: ${parentPayout.childPayouts.filter(p => p.status === 'COMPLETED').length}/${parentPayout.childPayouts.length} completed`);
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error(`Error updating parent payout ${parentId}:`, error);
         errors.push({
           parentPayoutId: parentId,
-          error: error.message,
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }

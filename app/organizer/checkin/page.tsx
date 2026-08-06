@@ -50,6 +50,13 @@ interface Ticket {
   checkedInAt?: string | null;
 }
 
+interface RecentCheckIn {
+  id: string;
+  name: string;
+  ticketNumber: string;
+  time: string;
+}
+
 interface CheckinResponse {
   success: boolean;
   message: string;
@@ -100,7 +107,7 @@ function CheckinContent() {
   const [message, setMessage] = useState<MessageState | null>(null);
   const [checkedInCount, setCheckedInCount] = useState(0);
   const [totalTickets, setTotalTickets] = useState(0);
-  const [recentCheckIns, setRecentCheckIns] = useState<any[]>([]);
+  const [recentCheckIns, setRecentCheckIns] = useState<RecentCheckIn[]>([]);
   const [lastScanResult, setLastScanResult] = useState<{ data: string; time: string } | null>(null);
 
   // ✅ Camera State
@@ -237,9 +244,9 @@ function CheckinContent() {
   useEffect(() => {
     if (!selectedEvent) return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStats();
     statsIntervalRef.current = setInterval(fetchStats, 5000);
-
     return () => {
       if (statsIntervalRef.current) clearInterval(statsIntervalRef.current);
     };

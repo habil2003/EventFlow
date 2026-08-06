@@ -60,16 +60,16 @@ export async function GET(
     // Convert and validate all numeric fields
     const formattedBookings = bookings.map(booking => {
       // Get tier price as number
-      let price = Number(booking.tier?.price) || 0;
+      const price = Number(booking.tier?.price) || 0;
       
       // Get quantity as number
-      let quantity = Number(booking.quantity) || 1;
+      const quantity = Number(booking.quantity) || 1;
       
       // Calculate correct total amount based on tier price and quantity
       const calculatedTotal = price * quantity;
       
       // Get stored total amount
-      let storedTotal = Number(booking.totalAmount) || 0;
+      const storedTotal = Number(booking.totalAmount) || 0;
       
       // Use calculated total if stored is 0 or mismatched
       const finalTotal = (storedTotal === 0 || storedTotal !== calculatedTotal) ? calculatedTotal : storedTotal;

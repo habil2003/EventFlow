@@ -9,12 +9,6 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ArrowPathIcon,
-  BuildingOfficeIcon,
-  CalendarIcon,
-  UserIcon,
-  MoonIcon,
-  SunIcon,
-  ArrowLeftIcon,
   DocumentTextIcon,
   InformationCircleIcon,
   MagnifyingGlassIcon,
@@ -64,7 +58,6 @@ export default function AdminPayoutsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [payouts, setPayouts] = useState<Payout[]>([]);
@@ -91,20 +84,13 @@ export default function AdminPayoutsPage() {
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
     document.documentElement.classList.toggle("dark", initialTheme === "dark");
   }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -153,7 +139,9 @@ export default function AdminPayoutsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchPayouts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, pagination.page]);
 
   const formatDate = (dateString: string) => {

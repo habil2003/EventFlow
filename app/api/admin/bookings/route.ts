@@ -1,7 +1,28 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma, PaymentStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";  // ← Import from lib/auth
 import { prisma } from "@/lib/prisma";     // ← Import prisma from lib/prisma
+
+type TicketBookingRow = Prisma.TicketBookingGetPayload<{
+  include: {
+    user: { select: { name: true; email: true } };
+    event: { select: { id: true; title: true; eventDate: true; location: true } };
+    tier: { select: { id: true; name: true; price: true } };
+    payouts: true;
+  };
+}>;
+
+type VendorBookingRow = Prisma.VendorBookingGetPayload<{
+  include: {
+    user: { select: { name: true; email: true } };
+    vendor: { select: { id: true; businessName: true; location: true } };
+    servicePackage: { select: { id: true; name: true; price: true } };
+    userSocialEvent: { select: { id: true; title: true; eventDate: true } };
+    payouts: true;
+    refunds: true;
+  };
+}>;
 
 // GET /api/admin/bookings - Get all bookings (ticket + vendor)
 export async function GET(request: Request) {
@@ -23,12 +44,12 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get("page") || "1");
     const skip = (page - 1) * limit;
 
-    let ticketBookings: any[] = [];
-    let vendorBookings: any[] = [];
+    let ticketBookings: TicketBookingRow[] = [];
+    let vendorBookings: VendorBookingRow[] = [];
 
     // Get ticket bookings
     if (type === "all" || type === "ticket") {
-      const where: any = {};
+      const where: Prisma.TicketBookingWhereInput = {};
       
       if (search) {
         where.OR = [
@@ -39,7 +60,7 @@ export async function GET(request: Request) {
       }
 
       if (status !== "all") {
-        where.paymentStatus = status;
+        where.paymentStatus = status as PaymentStatus;
       }
 
       ticketBookings = await prisma.ticketBooking.findMany({
@@ -64,7 +85,7 @@ export async function GET(request: Request) {
 
     // Get vendor bookings
     if (type === "all" || type === "vendor") {
-      const where: any = {};
+      const where: Prisma.VendorBookingWhereInput = {};
       
       if (search) {
         where.OR = [
@@ -76,7 +97,7 @@ export async function GET(request: Request) {
       }
 
       if (status !== "all") {
-        where.paymentStatus = status;
+        where.paymentStatus = status as PaymentStatus;
       }
 
       vendorBookings = await prisma.vendorBooking.findMany({
@@ -147,16 +168,16 @@ export async function GET(request: Request) {
     // Calculate stats
     const stats = {
       total: allBookings.length,
-      pending: allBookings.filter((b: any) => b.status === "PENDING").length,
-      completed: allBookings.filter((b: any) => b.status === "COMPLETED").length,
-      heldInEscrow: allBookings.filter((b: any) => b.status === "HELD_IN_ESCROW").length,
-      processingPayout: allBookings.filter((b: any) => b.status === "PROCESSING_PAYOUT").length,
-      refunded: allBookings.filter((b: any) => b.status === "REFUNDED").length,
-      disputed: allBookings.filter((b: any) => b.status === "DISPUTED").length,
-      failed: allBookings.filter((b: any) => b.status === "FAILED").length,
-      totalRevenue: allBookings.reduce((sum: number, b: any) => sum + Number(b.amount || 0), 0),
-      totalTicketBookings: allBookings.filter((b: any) => b.type === "TICKET").length,
-      totalVendorBookings: allBookings.filter((b: any) => b.type === "VENDOR").length,
+      pending: allBookings.filter((b) => b.status === "PENDING").length,
+      completed: allBookings.filter((b) => b.status === "COMPLETED").length,
+      heldInEscrow: allBookings.filter((b) => b.status === "HELD_IN_ESCROW").length,
+      processingPayout: allBookings.filter((b) => b.status === "PROCESSING_PAYOUT").length,
+      refunded: allBookings.filter((b) => b.status === "REFUNDED").length,
+      disputed: allBookings.filter((b) => b.status === "DISPUTED").length,
+      failed: allBookings.filter((b) => b.status === "FAILED").length,
+      totalRevenue: allBookings.reduce((sum, b) => sum + Number(b.amount || 0), 0),
+      totalTicketBookings: allBookings.filter((b) => b.type === "TICKET").length,
+      totalVendorBookings: allBookings.filter((b) => b.type === "VENDOR").length,
     };
 
     return NextResponse.json({

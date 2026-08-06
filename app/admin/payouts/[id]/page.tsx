@@ -4,13 +4,12 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowLeftIcon,
   CheckCircleIcon,
   ClockIcon,
-  CurrencyRupeeIcon,
   DocumentTextIcon,
-  InformationCircleIcon,
   ShieldCheckIcon,
   UserIcon,
   CalendarIcon,
@@ -176,7 +175,7 @@ export default function AdminPayoutDetailPage() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-12">
             <DocumentTextIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Payout Not Found</h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-2">The payout you're looking for doesn't exist.</p>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">The payout you&apos;re looking for doesn&apos;t exist.</p>
             <Link href="/admin/payouts" className="mt-6 inline-block px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
               Back to Payouts
             </Link>
@@ -439,10 +438,12 @@ export default function AdminPayoutDetailPage() {
                           rel="noopener noreferrer"
                           className="block"
                         >
-                          <img 
+                          <Image 
                             src={proofImage} 
                             alt="Transfer Proof" 
-                            className="max-w-full max-h-48 rounded-lg border border-green-200 dark:border-green-800 hover:opacity-80 transition-opacity"
+                            width={640}
+                            height={384}
+                            className="max-w-full max-h-48 w-auto h-auto rounded-lg border border-green-200 dark:border-green-800 hover:opacity-80 transition-opacity"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                               const parent = (e.target as HTMLImageElement).parentElement;

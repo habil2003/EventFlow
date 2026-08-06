@@ -81,7 +81,7 @@ export default function DateRangePicker({ vendorId, onSelect, minDate, maxDate }
       
       // Check if any date in range is unavailable
       let hasUnavailable = false;
-      let current = new Date(start);
+      const current = new Date(start);
       while (current <= end && !hasUnavailable) {
         if (isDateUnavailable(current)) {
           hasUnavailable = true;

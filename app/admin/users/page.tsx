@@ -9,10 +9,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
-  UserCircleIcon,
   EnvelopeIcon,
-  CalendarIcon,
-  ShieldCheckIcon,
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 
@@ -76,6 +73,7 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
   }, []);
 

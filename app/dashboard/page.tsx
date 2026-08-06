@@ -213,7 +213,7 @@ export default function UserDashboard() {
             </span>
           </h1>
           <p className="mt-1 text-gray-500 dark:text-gray-400">
-            Here's what's happening with your events and bookings
+            Here&apos;s what&apos;s happening with your events and bookings
           </p>
         </div>
         <div className="flex gap-3">

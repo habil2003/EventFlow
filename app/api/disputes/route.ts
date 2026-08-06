@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { bookingId, reason, description, evidence } = await request.json();
+    const { bookingId, reason, description } = await request.json();
 
     // ── VALIDATE REQUIRED FIELDS ──────────────────────────────────
     if (!bookingId) {
@@ -40,7 +40,16 @@ export async function POST(request: Request) {
         userId: session.user.id,
       },
       include: {
-        vendor: true,
+        vendor: {
+          include: {
+            user: {
+              select: {
+                email: true,
+                name: true,
+              },
+            },
+          },
+        },
         userSocialEvent: true,
         servicePackage: true,
         disputes: true,

@@ -42,7 +42,11 @@ export async function GET() {
     });
 
     const formattedEvents = umbrellaEvents.map((event) => {
-      const bookings = event.vendorBookings || [];
+      const bookings = (event.vendorBookings || []).map((b) => ({
+        bookingStatus: b.bookingStatus,
+        totalAmount: Number(b.totalAmount),
+        vendorId: b.vendorId,
+      }));
 
       const {
         derivedStatus,

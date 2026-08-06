@@ -27,7 +27,7 @@ interface RefundResponse {
 export async function processKhaltiRefund(
   pidx: string,
   amountNpr?: number
-): Promise<{ success: boolean; message: string; data?: any; requiresManual?: boolean; refundId?: string }> {
+): Promise<{ success: boolean; message: string; data?: LookupResponse | RefundResponse; requiresManual?: boolean; refundId?: string }> {
   try {
     console.log('=========================================');
     console.log('💰 PROCESSING KHALTI REFUND');
@@ -97,7 +97,7 @@ export async function processKhaltiRefund(
     console.log('Refund URL:', refundUrl);
     
     // ✅ FIXED: Convert amount from NPR to PAISA (multiply by 100)
-    let requestBody: any = {};
+    const requestBody: Record<string, number> = {};
     if (amountNpr && amountNpr > 0) {
       const amountPaisa = Math.round(amountNpr * 100);
       requestBody.amount = amountPaisa; // Khalti expects amount in PAISA

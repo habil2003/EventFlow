@@ -51,7 +51,7 @@ interface Event {
 }
 
 // Helper function to safely convert any value to a number
-const safeNumber = (value: any): number => {
+const safeNumber = (value: unknown): number => {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') return parseFloat(value) || 0;
   return 0;
@@ -121,6 +121,7 @@ function EventBookingsContent({ params }: { params: Promise<{ id: string }> }) {
       );
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFilteredBookings(filtered);
   }, [searchTerm, filterStatus, bookings]);
 

@@ -1,6 +1,7 @@
 // app/api/admin/payouts/route.ts
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '20');
 
     // Build where clause - only show parent payouts (bulk payouts and individual non-bulk)
-    const where: any = {
+    const where: Prisma.PayoutWhereInput = {
       bulkPayoutId: null,
     };
 

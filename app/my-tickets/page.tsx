@@ -64,6 +64,7 @@ function MyTicketsContent() {
   const paymentSuccess = searchParams.get("payment");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

@@ -246,6 +246,7 @@ function VendorBookingContent() {
   // Pre-fill form with existing event data
   useEffect(() => {
     if (existingEventTitle) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEventTitle(decodeURIComponent(existingEventTitle));
     }
   }, [existingEventTitle]);

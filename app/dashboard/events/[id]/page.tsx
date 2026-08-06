@@ -522,7 +522,7 @@ export default function EventDetailPage({
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-500">
                   Your payments are held in secure escrow and will be released
-                  to vendors only after service delivery. You're protected
+                  to vendors only after service delivery. You&apos;re protected
                   against fraud and non-delivery.
                 </p>
               </div>

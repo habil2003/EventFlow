@@ -1,4 +1,5 @@
 import { NextAuthOptions } from "next-auth";
+import type { User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -57,17 +58,37 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.role = (user as any).role;
-        token.status = (user as any).status;
+        const authUser = user as User;
+        token.id = authUser.id;
+        token.role = authUser.role;
+        token.status = authUser.status;
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
-        (session.user as any).status = token.status;
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.status = token.status;
+
+        // ✅ SECURITY: Re-fetch the user's current role/status from the DB on
+        // every session read. The JWT only records the role at sign-in, so
+        // without this an admin could be demoted (or blocked) and still keep
+        // their old privileges until the token expires.
+        if (token.id) {
+          try {
+            const currentUser = await prisma.user.findUnique({
+              where: { id: token.id as string },
+              select: { role: true, status: true },
+            });
+            if (currentUser) {
+              session.user.role = currentUser.role;
+              session.user.status = currentUser.status;
+            }
+          } catch {
+            // Fall back to the token values if the lookup fails.
+          }
+        }
       }
       return session;
     }

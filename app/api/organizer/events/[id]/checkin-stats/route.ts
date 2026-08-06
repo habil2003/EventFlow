@@ -18,6 +18,25 @@ export async function GET(
       );
     }
 
+    // ✅ SECURITY: Only the event's own organizer (or an admin) may view
+    // check-in stats. Without this, any authenticated user could read the
+    // check-in data for any event on the platform.
+    const event = await prisma.ticketedEvent.findUnique({
+      where: { id },
+      select: { organizerId: true },
+    });
+
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    const isOwner = event.organizerId === session.user.id;
+    const isAdmin = session.user.role === "ADMIN";
+
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const tickets = await prisma.ticketBooking.findMany({
       where: {
         eventId: id,

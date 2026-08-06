@@ -9,12 +9,10 @@ import {
   MagnifyingGlassIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon,
   UserCircleIcon,
   MapPinIcon,
   EyeIcon,
   PencilSquareIcon,
-  TrashIcon,
   PlusIcon,
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
@@ -83,7 +81,9 @@ export default function EventsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, statusFilter]);
 
   const showMessage = (text: string, type: "success" | "error") => {

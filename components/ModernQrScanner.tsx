@@ -1,6 +1,6 @@
 "use client";
 
-import { Scanner } from '@yudiel/react-qr-scanner';
+import { Scanner, type IDetectedBarcode, type IScannerError, type IScannerHandle } from '@yudiel/react-qr-scanner';
 import { memo, useRef, useEffect, useState } from 'react';
 import { CameraIcon, XMarkIcon, ArrowPathIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
@@ -11,7 +11,7 @@ interface ModernQrScannerProps {
 }
 
 function ModernQrScanner({ onScanSuccess, onError, onClose }: ModernQrScannerProps) {
-  const scannerRef = useRef<any>(null);
+  const scannerRef = useRef<IScannerHandle | null>(null);
   const isMounted = useRef(true);
   const [cameraReady, setCameraReady] = useState(false);
   const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied' | 'unavailable'>('prompt');
@@ -75,19 +75,20 @@ function ModernQrScanner({ onScanSuccess, onError, onClose }: ModernQrScannerPro
         setErrorMessage(null);
         console.log("✅ Camera permission granted");
         
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("❌ Camera error:", err);
+        const error = err instanceof Error ? err : new Error(String(err));
         
         // ✅ Check if it's a permission error
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
           setPermissionState('denied');
           setErrorMessage("Camera access was denied.");
-        } else if (err.name === 'NotFoundError') {
+        } else if (error.name === 'NotFoundError') {
           setPermissionState('unavailable');
           setErrorMessage("No camera found on this device.");
         } else {
           setPermissionState('denied');
-          setErrorMessage(`Camera error: ${err.message || 'Unknown error'}`);
+          setErrorMessage(`Camera error: ${error.message || 'Unknown error'}`);
         }
       }
     };
@@ -100,7 +101,7 @@ function ModernQrScanner({ onScanSuccess, onError, onClose }: ModernQrScannerPro
     };
   }, []);
 
-  const handleScan = (result: any) => {
+  const handleScan = (result: IDetectedBarcode[]) => {
     if (!isMounted.current || !cameraReady) return;
     if (result && result.length > 0 && result[0].rawValue) {
       console.log("✅ QR scanned:", result[0].rawValue);
@@ -108,12 +109,12 @@ function ModernQrScanner({ onScanSuccess, onError, onClose }: ModernQrScannerPro
     }
   };
 
-  const handleError = (error: any) => {
+  const handleError = (error: IScannerError) => {
     if (!isMounted.current) return;
     console.error("Scanner error:", error);
     
     // ✅ Check if it's a permission error
-    if (error?.message?.includes('permission') || error?.message?.includes('denied') || error?.name === 'NotAllowedError') {
+    if (error.message?.includes('permission') || error.message?.includes('denied') || error.kind === 'permission-denied') {
       setPermissionState('denied');
       setErrorMessage("Camera access denied. Please allow camera access.");
     }
@@ -155,15 +156,16 @@ function ModernQrScanner({ onScanSuccess, onError, onClose }: ModernQrScannerPro
       setErrorMessage(null);
       console.log("✅ Camera permission granted on retry");
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("❌ Retry failed:", err);
+      const error = err instanceof Error ? err : new Error(String(err));
       
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         setPermissionState('denied');
         setErrorMessage("Camera access is still denied. Please enable it in browser settings.");
       } else {
         setPermissionState('denied');
-        setErrorMessage(`Camera error: ${err.message || 'Unknown error'}`);
+        setErrorMessage(`Camera error: ${error.message || 'Unknown error'}`);
       }
     } finally {
       setIsRetrying(false);
@@ -197,7 +199,7 @@ function ModernQrScanner({ onScanSuccess, onError, onClose }: ModernQrScannerPro
               <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1.5 list-decimal list-inside">
                 <li>Click the <strong>lock icon</strong> 🔒 in the address bar</li>
                 <li>Find <strong>Camera</strong> in the permissions list</li>
-                <li>Change from <strong>"Block"</strong> to <strong>"Allow"</strong></li>
+                <li>Change from <strong>&quot;Block&quot;</strong> to <strong>&quot;Allow&quot;</strong></li>
                 <li>Refresh the page and try again</li>
               </ul>
             </div>
@@ -207,7 +209,7 @@ function ModernQrScanner({ onScanSuccess, onError, onClose }: ModernQrScannerPro
         {/* ✅ Browser-specific help */}
         <div className="mt-3 p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg text-left w-full max-w-sm">
           <p className="text-xs text-gray-600 dark:text-gray-400">
-            💡 <strong>Tip:</strong> If you're on mobile, check your browser's site settings.
+            💡 <strong>Tip:</strong> If you&apos;re on mobile, check your browser&apos;s site settings.
           </p>
         </div>
         

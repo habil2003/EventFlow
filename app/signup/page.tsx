@@ -49,7 +49,7 @@ interface RegisterResponse {
   requiresApproval?: boolean;
   emailSent?: boolean;
   role?: string;
-  user?: any;
+  user?: unknown;
   requiresVerification?: boolean;
 }
 
@@ -94,6 +94,7 @@ export default function SignupPage() {
 
   // Theme management
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -175,8 +176,8 @@ export default function SignupPage() {
       setEmailSent(data.emailSent || false);
       setUserRole(data.role || role);
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || "Registration failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -187,8 +188,8 @@ export default function SignupPage() {
     try {
       await api.post<ResendResponse>('/api/auth/resend-verification', { email });
       alert("Verification email resent! Please check your inbox.");
-    } catch (err: any) {
-      alert(err.message || "Failed to resend verification email.");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to resend verification email.");
     } finally {
       setLoading(false);
     }
@@ -218,7 +219,7 @@ export default function SignupPage() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Check Your Email</h2>
           <p className="mt-2 text-gray-500 dark:text-gray-400">
-            We've sent a verification email to <strong className="text-gray-700 dark:text-gray-300">{email}</strong>.
+            We&apos;ve sent a verification email to <strong className="text-gray-700 dark:text-gray-300">{email}</strong>.
           </p>
           <p className="mt-1 text-sm text-gray-400 dark:text-gray-500">
             Please check your inbox and click the verification link to activate your account.
@@ -241,7 +242,7 @@ export default function SignupPage() {
           {!emailSent && (
             <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
               <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                ⚠️ We couldn't send the email. Please check your spam folder or try resending.
+                ⚠️ We couldn&apos;t send the email. Please check your spam folder or try resending.
               </p>
             </div>
           )}

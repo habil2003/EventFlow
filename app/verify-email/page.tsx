@@ -19,6 +19,7 @@ function VerifyEmailContent() {
     console.log('🔍 Token from URL:', token ? token.substring(0, 20) + '...' : 'No token');
 
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus('error');
       setMessage('No verification token provided');
       return;
@@ -118,7 +119,7 @@ function VerifyEmailContent() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Link Expired</h1>
             <p className="text-gray-600 dark:text-gray-300 mb-4">{message}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Don't worry! You can request a new verification link below.
+              Don&apos;t worry! You can request a new verification link below.
             </p>
             
             {/* ✅ Resend button with email input */}

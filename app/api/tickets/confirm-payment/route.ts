@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { initiateKhaltiPayment } from "@/lib/payment/khalti";
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
     );
 
     // ✅ FIX: Preserve existing gatewayResponse (including reservationId)
-    const existingGatewayResponse = paymentTransaction.gatewayResponse as any || {};
+    const existingGatewayResponse = (paymentTransaction.gatewayResponse as unknown as Record<string, Prisma.InputJsonValue>) || {};
     console.log("📍 [confirm-payment] Existing gatewayResponse:", existingGatewayResponse);
 
     // ✅ Store returnUrl in transaction while preserving existing data

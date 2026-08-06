@@ -504,3 +504,22 @@ model Rating {
   @@index([eventId])
   @@index([userId])
 }
+
+// ==========================================
+// 8. PLATFORM SETTINGS
+// ==========================================
+
+model PlatformSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  type        String   @default("string")
+  group       String   @default("general")
+  label       String?
+  description String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([group])
+}

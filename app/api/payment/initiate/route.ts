@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { PaymentType } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateTransactionId, toPaisa } from '@/lib/payment';
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
     let transaction = await prisma.paymentTransaction.findFirst({
       where: {
         vendorBookingId: bookingId,
-        paymentType: paymentType as any,
+        paymentType: paymentType as PaymentType,
         status: 'PENDING', // Only reuse if still pending
       },
     });
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
           amount: amount,
           amountInPaisa: toPaisa(amount),
           gateway: gateway.toUpperCase(),
-          paymentType: paymentType as any,
+          paymentType: paymentType as PaymentType,
           vendorBookingId: bookingId,
           status: 'PENDING'
         }

@@ -261,7 +261,7 @@ function SalesContent() {
             </h3>
             
             <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
-              You haven't created any events. Create your first event to start tracking sales and analytics.
+              You haven&apos;t created any events. Create your first event to start tracking sales and analytics.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -329,7 +329,7 @@ function SalesContent() {
                   No Tickets Sold Yet
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                  Your event "{event.title}" hasn't received any ticket sales yet.
+                  Your event &quot;{event.title}&quot; hasn&apos;t received any ticket sales yet.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Link

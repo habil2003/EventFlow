@@ -36,7 +36,7 @@ interface Package {
   pricingType?: string;  // "fixed" or "per_person"
   minGuests?: number;
   maxGuests?: number;
-  serviceDetails?: any;
+  serviceDetails?: unknown;
   status?: string;
   addOns: {
     id: string;
@@ -72,6 +72,7 @@ export default function VendorPackagesPage() {
 
   // Theme management
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;

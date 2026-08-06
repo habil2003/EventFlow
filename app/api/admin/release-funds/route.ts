@@ -20,9 +20,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { bookingId, amount, type } = await request.json();
+    const { bookingId, type } = await request.json();
 
-    console.log('Release funds request:', { bookingId, amount, type });
+    console.log('Release funds request:', { bookingId, type });
 
     // ─── TICKET BOOKING RELEASE ──────────────────────────────────
     const ticketBooking = await prisma.ticketBooking.findUnique({
@@ -236,9 +236,9 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      // ✅ Calculate amounts
+      // ✅ Calculate amounts — derived from the DB, never from client input.
       const commissionRate = await getPlatformCommissionRate();
-      const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      const numericAmount = Number(vendorBooking.depositAmount) || 0;
       const platformCommission = numericAmount * commissionRate;
       const vendorPayoutAmount = numericAmount - platformCommission;
 
@@ -355,9 +355,9 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      // ✅ Calculate amounts
+      // ✅ Calculate amounts — derived from the DB, never from client input.
       const commissionRate = await getPlatformCommissionRate();
-      const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      const numericAmount = Number(vendorBooking.totalAmount) || 0;
       const platformCommission = numericAmount * commissionRate;
       const vendorPayoutAmount = numericAmount - platformCommission;
 
@@ -470,9 +470,9 @@ export async function POST(request: Request) {
         }, { status: 400 });
       }
 
-      // ✅ Calculate amounts
+      // ✅ Calculate amounts — derived from the DB, never from client input.
       const commissionRate = await getPlatformCommissionRate();
-      const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      const numericAmount = Number(vendorBooking.remainingAmount) || 0;
       const platformCommission = numericAmount * commissionRate;
       const vendorPayoutAmount = numericAmount - platformCommission;
 

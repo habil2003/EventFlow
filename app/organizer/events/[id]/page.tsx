@@ -54,11 +54,11 @@ interface RecentBooking {
   quantity?: number;
 }
 
-export default function OrganizerEventDetailPage({ params }: { params: { id: string } }) {
+export default function OrganizerEventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const unwrappedParams = React.use(params as any) as { id: string };
+  const unwrappedParams = React.use(params);
   const eventId = unwrappedParams.id;
 
   const [event, setEvent] = useState<Event | null>(null);
@@ -75,6 +75,7 @@ export default function OrganizerEventDetailPage({ params }: { params: { id: str
   useEffect(() => {
     if (!eventId) {
       console.error("No event ID provided");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }

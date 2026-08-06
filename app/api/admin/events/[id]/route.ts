@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 // GET /api/admin/events/[id] - Get single event
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -18,8 +18,10 @@ export async function GET(
       );
     }
 
+    const { id } = await params;
+
     const event = await prisma.ticketedEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         organizer: {
           select: {
@@ -68,7 +70,7 @@ export async function GET(
 // PATCH /api/admin/events/[id] - Update event
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -80,12 +82,13 @@ export async function PATCH(
       );
     }
 
+    const { id } = await params;
     const body = await request.json();
     const { isActive, isCompleted, title, description, location } = body;
 
     // Check if event exists
     const existingEvent = await prisma.ticketedEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingEvent) {
@@ -97,7 +100,7 @@ export async function PATCH(
 
     // Update event
     const updatedEvent = await prisma.ticketedEvent.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(isActive !== undefined && { isActive }),
         ...(isCompleted !== undefined && { isCompleted }),
@@ -121,7 +124,7 @@ export async function PATCH(
 // DELETE /api/admin/events/[id] - Delete event (soft delete)
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -133,9 +136,11 @@ export async function DELETE(
       );
     }
 
+    const { id } = await params;
+
     // Check if event exists
     const existingEvent = await prisma.ticketedEvent.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         bookings: true,
       },
@@ -158,7 +163,7 @@ export async function DELETE(
 
     // Delete event
     await prisma.ticketedEvent.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json(

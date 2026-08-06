@@ -143,6 +143,7 @@ function BookingsContent() {
   const paymentSuccess = searchParams.get("payment");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -151,6 +152,7 @@ function BookingsContent() {
   }, [status, router]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (tabParam === "events") setActiveView("events");
     else if (tabParam === "past") setActiveView("past");
     else if (tabParam === "upcoming") setActiveView("upcoming");
@@ -830,7 +832,7 @@ function BookingsContent() {
                       onChange={(e) =>
                         setTempFilters({
                           ...tempFilters,
-                          dateRange: e.target.value as any,
+                          dateRange: e.target.value as "all" | "upcoming" | "past" | "thisMonth" | "nextMonth",
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"

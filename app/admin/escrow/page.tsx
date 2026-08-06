@@ -13,7 +13,6 @@ import {
   BanknotesIcon,
   BuildingOfficeIcon,
   ArrowPathIcon,
-  ShieldCheckIcon,
   InformationCircleIcon,
   EyeIcon,
   PhotoIcon,
@@ -22,10 +21,29 @@ import {
   MagnifyingGlassIcon,
   DocumentTextIcon,
   CalendarIcon,
-  TagIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
+
+interface Payout {
+  id: string;
+  type?: string;
+  amount?: number;
+  vendorPayout?: number;
+  platformCommission?: number;
+  status?: string;
+  parentPayoutId?: string | null;
+  ticketCount?: number;
+  bookingIds?: string[];
+  payoutIds?: string[];
+  eventTitle?: string;
+  isBulk?: boolean;
+  individualPayouts?: Array<{
+    id: string;
+    customerName?: string;
+    amount?: number;
+    payout?: number;
+    payoutId?: string | null;
+  }>;
+}
 
 interface EscrowBooking {
   id: string;
@@ -50,7 +68,7 @@ interface EscrowBooking {
   hasDepositPayout?: boolean;
   hasRemainingPayout?: boolean;
   hasPendingPayout?: boolean;
-  pendingPayouts: any[];
+  pendingPayouts: Payout[];
   customerPaidDeposit?: boolean;
   customerPaidFull?: boolean;
   amountReleasedAt?: string | null;
@@ -72,6 +90,8 @@ interface EscrowBooking {
   displayAmount?: number;
   displayCommission?: number;
   displayPayout?: number;
+  vendorMarkedComplete?: boolean;
+  customerConfirmed?: boolean;
 }
 
 interface EventGroup {
@@ -102,10 +122,8 @@ export default function AdminEscrowPage() {
   const router = useRouter();
 
   const [bookings, setBookings] = useState<EscrowBooking[]>([]);
-  const [eventGroups, setEventGroups] = useState<EventGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [releasingId, setReleasingId] = useState<string | null>(null);
-  const [releaseType, setReleaseType] = useState<string | null>(null);
   const [message, setMessage] = useState<{
     text: string;
     type: "success" | "error";
@@ -130,10 +148,9 @@ export default function AdminEscrowPage() {
   const [bulkReleaseModalOpen, setBulkReleaseModalOpen] = useState(false);
   const [selectedEventGroup, setSelectedEventGroup] =
     useState<EventGroup | null>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const [showVerifyModal, setShowVerifyModal] = useState(false);
-  const [selectedPayout, setSelectedPayout] = useState<any>(null);
+  const [selectedPayout, setSelectedPayout] = useState<Payout | null>(null);
   const [verificationData, setVerificationData] = useState({
     transactionReference: "",
     transferMethod: "BANK_TRANSFER",
@@ -161,7 +178,6 @@ export default function AdminEscrowPage() {
       if (response.ok) {
         const data = await response.json();
         setBookings(data.bookings || []);
-        setEventGroups(data.eventGroups || []);
       }
     } catch (error) {
       console.error("Error fetching escrow data:", error);
@@ -171,6 +187,7 @@ export default function AdminEscrowPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchEscrowData();
   }, []);
 
@@ -199,7 +216,6 @@ export default function AdminEscrowPage() {
     }
 
     setReleasingId(bookingId);
-    setReleaseType(type);
 
     try {
       const response = await fetch("/api/admin/release-funds", {
@@ -236,7 +252,6 @@ export default function AdminEscrowPage() {
       setTimeout(() => setMessage(null), 5000);
     } finally {
       setReleasingId(null);
-      setReleaseType(null);
     }
   };
 
@@ -287,46 +302,11 @@ export default function AdminEscrowPage() {
     }
   };
 
-  const openBulkReleaseModal = (group: EventGroup) => {
-    const releasableBookings = group.bookings.filter((b) => b.canRelease);
-
-    if (releasableBookings.length === 0) {
-      setMessage({
-        text: "No tickets available for bulk release. All tickets may already be released.",
-        type: "error",
-      });
-      setTimeout(() => setMessage(null), 5000);
+  const verifyPayout = async () => {
+    if (!selectedPayout) {
       return;
     }
 
-    const totalAmount = releasableBookings.reduce(
-      (sum, b) => sum + b.totalAmount,
-      0,
-    );
-    const totalCommission = releasableBookings.reduce(
-      (sum, b) => sum + (b.platformCommission || 0),
-      0,
-    );
-    const totalPayout = releasableBookings.reduce(
-      (sum, b) => sum + (b.organizerPayout || 0),
-      0,
-    );
-
-    const filteredGroup: EventGroup = {
-      ...group,
-      bookings: releasableBookings,
-      bookingIds: releasableBookings.map((b) => b.id),
-      count: releasableBookings.length,
-      totalAmount: totalAmount,
-      totalCommission: totalCommission,
-      organizerPayout: totalPayout,
-    };
-
-    setSelectedEventGroup(filteredGroup);
-    setBulkReleaseModalOpen(true);
-  };
-
-  const verifyPayout = async () => {
     if (
       !verificationData.transactionReference ||
       !verificationData.proofImage
@@ -455,97 +435,9 @@ export default function AdminEscrowPage() {
     setReleaseModalOpen(true);
   };
 
-  const openVerifyModal = (payout: any) => {
+  const openVerifyModal = (payout: Payout) => {
     setSelectedPayout(payout);
     setShowVerifyModal(true);
-  };
-
-  const openBulkVerifyModal = (group: EventGroup) => {
-    const bulkTickets = group.bookings.filter((b) => {
-      const hasBulkPayout =
-        b.pendingPayouts?.some((p) => p.parentPayoutId !== null) || false;
-      return hasBulkPayout;
-    });
-
-    if (bulkTickets.length === 0) {
-      setMessage({
-        text: "No bulk tickets found to verify. Individual tickets can be verified individually.",
-        type: "error",
-      });
-      setTimeout(() => setMessage(null), 5000);
-      return;
-    }
-
-    const totalPayout = bulkTickets.reduce(
-      (sum, b) => sum + (b.organizerPayout || 0),
-      0,
-    );
-    const totalAmount = bulkTickets.reduce((sum, b) => sum + b.totalAmount, 0);
-    const totalCommission = bulkTickets.reduce(
-      (sum, b) => sum + (b.platformCommission || 0),
-      0,
-    );
-
-    const allPendingPayouts: any[] = [];
-    for (const booking of bulkTickets) {
-      if (booking.pendingPayouts && booking.pendingPayouts.length > 0) {
-        for (const payout of booking.pendingPayouts) {
-          if (payout.parentPayoutId) {
-            if (!allPendingPayouts.some((p) => p.id === payout.id)) {
-              allPendingPayouts.push(payout);
-            }
-          }
-        }
-      }
-    }
-
-    if (allPendingPayouts.length === 0) {
-      setMessage({
-        text: "No pending payouts found for these bulk tickets.",
-        type: "error",
-      });
-      setTimeout(() => setMessage(null), 5000);
-      return;
-    }
-
-    console.log("Bulk verification - bulk tickets:", bulkTickets.length);
-    console.log("Pending payouts found:", allPendingPayouts.length);
-
-    const bulkPayout = {
-      id: "bulk-" + group.eventId,
-      vendorPayout: totalPayout,
-      amount: totalAmount,
-      platformCommission: totalCommission,
-      type: "TICKET_SALES (Bulk)",
-      ticketCount: bulkTickets.length,
-      bookingIds: bulkTickets.map((b) => b.id),
-      payoutIds: allPendingPayouts.map((p) => p.id),
-      eventTitle: group.eventTitle,
-      isBulk: true,
-      individualPayouts: bulkTickets.map((b) => ({
-        id: b.id,
-        customerName: b.customerName,
-        amount: b.totalAmount,
-        payout: b.organizerPayout,
-        payoutId:
-          b.pendingPayouts?.find((p) => p.parentPayoutId !== null)?.id || null,
-      })),
-    };
-
-    console.log("Bulk payout object:", bulkPayout);
-
-    setSelectedPayout(bulkPayout);
-    setShowVerifyModal(true);
-  };
-
-  const toggleGroup = (eventId: string) => {
-    const newExpanded = new Set(expandedGroups);
-    if (newExpanded.has(eventId)) {
-      newExpanded.delete(eventId);
-    } else {
-      newExpanded.add(eventId);
-    }
-    setExpandedGroups(newExpanded);
   };
 
   const getReleaseStatusBadge = (booking: EscrowBooking) => {
@@ -591,7 +483,7 @@ export default function AdminEscrowPage() {
         booking.vendorPaymentStatus === "FULLY_PAID" &&
         (!booking.vendorMarkedComplete || !booking.customerConfirmed)
       ) {
-        let waitingFor = [];
+        const waitingFor: string[] = [];
         if (!booking.vendorMarkedComplete) waitingFor.push("Vendor");
         if (!booking.customerConfirmed) waitingFor.push("Customer");
         return {
@@ -1019,7 +911,11 @@ export default function AdminEscrowPage() {
 
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
+            onChange={(e) =>
+              setStatusFilter(
+                e.target.value as "all" | "HELD_IN_ESCROW" | "PROCESSING_PAYOUT",
+              )
+            }
             className="px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
           >
             <option value="all">All Status</option>
@@ -1079,19 +975,6 @@ export default function AdminEscrowPage() {
                     booking.type === "VENDOR"
                       ? getVendorStatusBadge(booking)
                       : null;
-
-                  const isBulkChild =
-                    booking.hasParentPayout === true ||
-                    booking.pendingPayouts?.some(
-                      (p) => p.parentPayoutId !== null,
-                    ) ||
-                    false;
-
-                  const showIndividualConfirm =
-                    isProcessingPayout &&
-                    booking.pendingPayouts &&
-                    booking.pendingPayouts.length > 0 &&
-                    !isBulkChild;
 
                   return (
                     <tr
@@ -2192,13 +2075,13 @@ export default function AdminEscrowPage() {
                                   Individual payouts:
                                 </p>
                                 {selectedPayout.individualPayouts.map(
-                                  (p: any, i: number) => (
+                                  (p, i: number) => (
                                     <p key={i} className="flex justify-between">
                                       <span>
                                         {p.customerName || `Ticket ${i + 1}`}
                                       </span>
                                       <span>
-                                        NPR {p.payout.toLocaleString()}
+                                        NPR {p.payout?.toLocaleString()}
                                       </span>
                                     </p>
                                   ),
@@ -2207,7 +2090,7 @@ export default function AdminEscrowPage() {
                                   <span>Total</span>
                                   <span>
                                     NPR{" "}
-                                    {selectedPayout.vendorPayout.toLocaleString()}
+                                    {selectedPayout.vendorPayout?.toLocaleString()}
                                   </span>
                                 </div>
                               </div>

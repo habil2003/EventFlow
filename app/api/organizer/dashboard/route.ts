@@ -3,6 +3,24 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type RecentSale = {
+  id: string;
+  eventTitle: string;
+  buyerName: string;
+  amount: number;
+  createdAt: Date;
+};
+
+type RecentEvent = {
+  id: string;
+  title: string;
+  eventDate: Date;
+  ticketsSold: number;
+  revenue: number;
+  checkIns: number;
+  status: string;
+};
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -47,8 +65,8 @@ export async function GET() {
     let totalTicketsSold = 0;
     let totalRevenue = 0;
     let checkInsToday = 0;
-    const recentSales: any[] = [];
-    const recentEvents: any[] = [];
+    const recentSales: RecentSale[] = [];
+    const recentEvents: RecentEvent[] = [];
 
     for (const event of events) {
       // Count tickets sold

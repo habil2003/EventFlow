@@ -135,6 +135,7 @@ function VendorPackagesContent() {
     setSelectedPackage(pkg);
     setCurrentImageIndex(0);
     setShowModal(true);
+    // eslint-disable-next-line react-hooks/immutability
     document.body.style.overflow = "hidden";
   };
 

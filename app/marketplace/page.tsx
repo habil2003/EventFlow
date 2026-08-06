@@ -93,6 +93,7 @@ function MarketplaceContent() {
   const cities = getUniqueCities(vendors);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -179,6 +180,7 @@ function MarketplaceContent() {
         break;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setFilteredVendors(filtered);
   }, [searchTerm, selectedService, selectedLocation, vendors, sortBy]);
 
@@ -306,7 +308,7 @@ function MarketplaceContent() {
             <span className="text-sm text-gray-400">Sort by:</span>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e) => setSortBy(e.target.value as "newest" | "rating" | "price_low" | "price_high")}
               className="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
             >
               <option value="newest">Newest</option>

@@ -6,24 +6,19 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useTheme } from "@/components/ThemeProvider";
 import ThemeWrapper from "@/components/ThemeWrapper";
+import Image from "next/image";
 import { 
   BuildingOfficeIcon,
-  BriefcaseIcon,
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
   EyeIcon,
-  MoonIcon,
-  SunIcon,
   ArrowLeftIcon,
   UserIcon,
   EnvelopeIcon,
   MapPinIcon,
-  PhoneIcon,
   CalendarIcon,
-  DocumentTextIcon
 } from "@heroicons/react/24/outline";
 
 interface Vendor {
@@ -55,18 +50,16 @@ function ApprovalsContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { theme, toggleTheme } = useTheme();
   const tab = searchParams.get("tab") || "vendors";
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [organizers, setOrganizers] = useState<Organizer[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<Vendor | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectItemId, setRejectItemId] = useState<string | null>(null);
   const [rejectItemType, setRejectItemType] = useState<string | null>(null);
   const [rejectUserId, setRejectUserId] = useState<string | null>(null);
 
@@ -133,7 +126,7 @@ function ApprovalsContent() {
     }
   };
 
-  const handleApprove = (userId: string, role: string, itemId: string) => {
+  const handleApprove = (userId: string, role: string) => {
     updateStatus(userId, role, "APPROVED", undefined);
   };
 
@@ -143,15 +136,13 @@ function ApprovalsContent() {
     }
     setShowRejectModal(false);
     setRejectionReason("");
-    setRejectItemId(null);
     setRejectItemType(null);
     setRejectUserId(null);
   };
 
-  const openRejectModal = (userId: string, role: string, itemId: string) => {
+  const openRejectModal = (userId: string, role: string) => {
     setRejectUserId(userId);
     setRejectItemType(role);
-    setRejectItemId(itemId);
     setShowRejectModal(true);
   };
 
@@ -248,9 +239,9 @@ function ApprovalsContent() {
                       <div className="p-5">
                         <div className="flex items-start gap-4">
                           {/* Vendor Image Placeholder */}
-                          <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center flex-shrink-0">
+                          <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center flex-shrink-0 relative overflow-hidden">
                             {vendor.imageUrl ? (
-                              <img src={vendor.imageUrl} alt={vendor.businessName} className="w-full h-full object-cover rounded-lg" />
+                              <Image src={vendor.imageUrl} alt={vendor.businessName} fill sizes="64px" className="object-cover rounded-lg" />
                             ) : (
                               <BuildingOfficeIcon className="h-8 w-8 text-indigo-500" />
                             )}
@@ -293,7 +284,7 @@ function ApprovalsContent() {
                                 View Details
                               </button>
                               <button
-                                onClick={() => handleApprove(vendor.userId, "VENDOR", vendor.id)}
+                                onClick={() => handleApprove(vendor.userId, "VENDOR")}
                                 disabled={actionLoading === vendor.id}
                                 className="flex items-center px-3 py-1.5 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                               >
@@ -301,7 +292,7 @@ function ApprovalsContent() {
                                 Approve
                               </button>
                               <button
-                                onClick={() => openRejectModal(vendor.userId, "VENDOR", vendor.id)}
+                                onClick={() => openRejectModal(vendor.userId, "VENDOR")}
                                 disabled={actionLoading === vendor.id}
                                 className="flex items-center px-3 py-1.5 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
                               >
@@ -396,14 +387,14 @@ function ApprovalsContent() {
                         </div>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => handleApprove(org.id, "ORGANIZER", org.id)}
+                            onClick={() => handleApprove(org.id, "ORGANIZER")}
                             disabled={actionLoading === org.id}
                             className="px-3 py-1 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700"
                           >
                             Approve
                           </button>
                           <button
-                            onClick={() => openRejectModal(org.id, "ORGANIZER", org.id)}
+                            onClick={() => openRejectModal(org.id, "ORGANIZER")}
                             disabled={actionLoading === org.id}
                             className="px-3 py-1 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700"
                           >
@@ -471,9 +462,9 @@ function ApprovalsContent() {
             <div className="p-6 space-y-4">
               {/* Vendor Image */}
               <div className="flex justify-center">
-                <div className="w-32 h-32 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center overflow-hidden">
+                <div className="w-32 h-32 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center overflow-hidden relative">
                   {selectedItem.imageUrl ? (
-                    <img src={selectedItem.imageUrl} alt={selectedItem.businessName} className="w-full h-full object-cover" />
+                    <Image src={selectedItem.imageUrl} alt={selectedItem.businessName} fill sizes="128px" className="object-cover" />
                   ) : (
                     <BuildingOfficeIcon className="h-12 w-12 text-indigo-500" />
                   )}
@@ -537,7 +528,7 @@ function ApprovalsContent() {
                 <>
                   <button
                     onClick={() => {
-                      handleApprove(selectedItem.userId, "VENDOR", selectedItem.id);
+                      handleApprove(selectedItem.userId, "VENDOR");
                       setShowDetailModal(false);
                     }}
                     className="px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -546,7 +537,7 @@ function ApprovalsContent() {
                   </button>
                   <button
                     onClick={() => {
-                      openRejectModal(selectedItem.userId, "VENDOR", selectedItem.id);
+                      openRejectModal(selectedItem.userId, "VENDOR");
                       setShowDetailModal(false);
                     }}
                     className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700"

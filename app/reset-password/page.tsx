@@ -19,6 +19,7 @@ function ResetPasswordContent() {
 
   useEffect(() => {
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('Invalid or missing reset token');
     }
   }, [token]);

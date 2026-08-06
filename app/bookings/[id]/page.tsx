@@ -107,6 +107,7 @@ function BookingDetailContent() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -947,7 +948,7 @@ function BookingDetailContent() {
                             Refund Failed
                           </p>
                           <p className="text-xs text-red-600 dark:text-red-500 mt-1">
-                            We couldn't process your refund automatically.
+                            We couldn&apos;t process your refund automatically.
                             Please contact support.
                           </p>
                         </div>

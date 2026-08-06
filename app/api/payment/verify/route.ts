@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { verifyKhaltiPayment } from '@/lib/payment/khalti';
 import { getAppUrl } from '@/lib/app-url';
 
 const KHALTI_FEE_PERCENT = Number(process.env.KHALTI_FEE_PERCENT || '0');
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
     console.log('📍 [payment-verify] Current status:', transaction.status);
 
     // ✅ Get the original return URL from the transaction
-    const gatewayResponse = transaction.gatewayResponse as any;
+    const gatewayResponse = transaction.gatewayResponse as unknown as { returnUrl?: string } | null;
     const originalReturnUrl = gatewayResponse?.returnUrl || `${appUrl}/my-bookings`;
 
     console.log('📍 [payment-verify] Original return URL:', originalReturnUrl);
@@ -112,8 +113,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (status === 'Completed') {
-      console.log('✅ [payment-verify] Payment successful for transaction:', transactionId);
+    // ✅ SECURITY: Verify the payment server-side with Khalti lookup.
+    // The `status` query param is attacker-controllable and must never be
+    // trusted alone. Only a successful gateway lookup can confirm the
+    // payment actually completed before we flip the transaction to COMPLETED.
+    const pidx = transaction.pidx;
+    const verification = pidx
+      ? await verifyKhaltiPayment(pidx)
+      : null;
+
+    const verifiedComplete =
+      verification?.success === true &&
+      verification.status === "Completed";
+
+    // Reconcile the amount Khalti actually collected against what we
+    // recorded at initiation time.
+    const amountMatches =
+      verification?.amount === undefined ||
+      Math.abs(Number(verification.amount) - Number(transaction.amount)) < 1;
+
+    if (verifiedComplete && amountMatches) {
+      console.log('✅ [payment-verify] Payment verified as Completed for transaction:', transactionId);
 
       const paidAmount = Number(transaction.amount);
       const khaltiFee = calculateKhaltiFee(paidAmount);

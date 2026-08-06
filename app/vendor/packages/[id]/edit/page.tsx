@@ -41,7 +41,7 @@ interface PackageData {
   pricingType: string;  // NEW
   minGuests?: number;   // NEW
   maxGuests?: number;   // NEW
-  serviceDetails?: any; // NEW
+  serviceDetails?: unknown; // NEW
   status?: string;      // NEW
   addOns: AddOn[];
 }
@@ -75,6 +75,7 @@ export default function EditPackagePage() {
 
   // Theme management
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -99,6 +100,11 @@ export default function EditPackagePage() {
     getId();
   }, [params]);
 
+  const showMessage = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
   // Fetch package data
   useEffect(() => {
     if (!packageId) return;
@@ -118,7 +124,7 @@ export default function EditPackagePage() {
           setPricingType(data.pricingType || "fixed");
           setMinGuests(data.minGuests?.toString() || "");
           setMaxGuests(data.maxGuests?.toString() || "");
-          setAddOns(data.addOns?.map((addon: any) => ({
+          setAddOns(data.addOns?.map((addon: AddOn) => ({
             ...addon,
             pricingType: addon.pricingType || "fixed"
           })) || []);
@@ -135,11 +141,6 @@ export default function EditPackagePage() {
     };
     fetchPackage();
   }, [packageId, router]);
-
-  const showMessage = (text: string, type: "success" | "error") => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
-  };
 
   const handleImageUpload = (result: string | string[]) => {
     if (Array.isArray(result)) {

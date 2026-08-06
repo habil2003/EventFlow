@@ -10,17 +10,18 @@ import {
   XCircleIcon,
   ClockIcon,
   UserCircleIcon,
-  CalendarIcon,
   CurrencyRupeeIcon,
   EyeIcon,
   ArrowPathIcon,
   DocumentTextIcon,
   BanknotesIcon,
   ExclamationTriangleIcon,
-  FilterIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
+
+interface TransactionRefund {
+  refundStatus?: string;
+  refundAmount?: number;
+}
 
 interface Transaction {
   id: string;
@@ -41,7 +42,7 @@ interface Transaction {
     email: string;
   } | null;
   event: string | null;
-  refunds: any[];
+  refunds: TransactionRefund[];
 }
 
 interface TransactionStats {
@@ -86,6 +87,11 @@ export default function TransactionsPage() {
     }
   }, [session, router]);
 
+  const showMessage = (text: string, type: "success" | "error") => {
+    setMessage({ text, type });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
   // Fetch transactions
   const fetchTransactions = async () => {
     setLoading(true);
@@ -110,7 +116,9 @@ export default function TransactionsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refetch when filters change
@@ -120,15 +128,11 @@ export default function TransactionsPage() {
     }, 500);
 
     return () => clearTimeout(debounceTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, typeFilter, statusFilter]);
 
-  const showMessage = (text: string, type: "success" | "error") => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
-  };
-
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { color: string; icon: any; label: string }> = {
+    const statusMap: Record<string, { color: string; icon: React.ComponentType<{ className?: string }>; label: string }> = {
       PENDING: {
         color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
         icon: ClockIcon,
@@ -647,7 +651,7 @@ export default function TransactionsPage() {
                             Refunds ({selectedTransaction.refunds.length})
                           </p>
                           <div className="mt-1 space-y-1">
-                            {selectedTransaction.refunds.map((refund: any, index: number) => (
+                            {selectedTransaction.refunds.map((refund, index: number) => (
                               <div key={index} className="flex justify-between text-sm">
                                 <span className="text-red-600 dark:text-red-400">
                                   {refund.refundStatus || "Pending"}

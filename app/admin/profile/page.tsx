@@ -96,7 +96,7 @@ export default function AdminProfilePage() {
       } else {
         setMessage({ text: data.error || "Failed to update profile", type: "error" });
       }
-    } catch (error) {
+    } catch {
       setMessage({ text: "An error occurred", type: "error" });
     } finally {
       setSaving(false);
@@ -138,7 +138,7 @@ export default function AdminProfilePage() {
       } else {
         setPasswordMessage({ text: data.error || "Failed to change password", type: "error" });
       }
-    } catch (error) {
+    } catch {
       setPasswordMessage({ text: "An error occurred", type: "error" });
     } finally {
       setChangingPassword(false);

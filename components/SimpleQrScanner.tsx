@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { Html5Qrcode } from "html5-qrcode";
 
 interface SimpleQrScannerProps {
   onScanSuccess: (decodedText: string) => void;
@@ -12,7 +13,7 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
   const [status, setStatus] = useState<string>("Initializing...");
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const [retryCount, setRetryCount] = useState(0);
-  const scannerRef = useRef<any>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerId = "qr-reader-container";
   const isMounted = useRef(true);
   const cameraStartedRef = useRef(false);
@@ -60,8 +61,9 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
       stream.getTracks().forEach(track => track.stop());
       addDebugLog("✅ Camera test successful!");
       return true;
-    } catch (err: any) {
-      addDebugLog(`❌ Camera test failed: ${err.name} - ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      addDebugLog(`❌ Camera test failed: ${error.name} - ${error.message}`);
       return false;
     }
   };
@@ -158,12 +160,13 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
         setRetryCount(0);
       }
       
-    } catch (err: any) {
-      addDebugLog(`❌ Error starting scanner: ${err.name} - ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      addDebugLog(`❌ Error starting scanner: ${error.name} - ${error.message}`);
       console.error("❌ Error starting scanner:", err);
       
       if (isMounted.current) {
-        const errorMsg = err instanceof Error ? err.message : "Could not start camera";
+        const errorMsg = error.message;
         
         let userFriendlyMsg = errorMsg;
         if (errorMsg.includes("NotAllowedError") || errorMsg.includes("Permission")) {
@@ -214,6 +217,7 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
   useEffect(() => {
     isMounted.current = true;
     cameraStartedRef.current = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     addDebugLog("Component mounted");
     
     if (!isCameraSupported()) {
@@ -235,7 +239,7 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
       if (scannerRef.current) {
         try {
           scannerRef.current.stop().catch(() => {});
-          scannerRef.current.clear().catch(() => {});
+          scannerRef.current.clear();
         } catch (e) {}
         scannerRef.current = null;
       }
@@ -312,7 +316,7 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
                 🔄 Retry
               </button>
               <p className="text-[10px] text-gray-500 mt-2">
-                Or use "Test Mode" below to scan manually
+                Or use &quot;Test Mode&quot; below to scan manually
               </p>
             </div>
           </div>
@@ -331,7 +335,7 @@ export default function SimpleQrScanner({ onScanSuccess, onError }: SimpleQrScan
                 🔄 Retry Camera
               </button>
               <p className="text-xs text-gray-400 mt-1">
-                Make sure you're using HTTPS and camera permissions are granted
+                Make sure you&apos;re using HTTPS and camera permissions are granted
               </p>
             </div>
           ) : (

@@ -40,17 +40,43 @@ interface VendorStats {
   }>;
 }
 
+interface VendorProfile {
+  serviceType: string;
+  businessName: string;
+  location?: string | null;
+  description?: string | null;
+}
+
+interface PackageSummary {
+  id: string;
+  name: string;
+  price: number;
+  isActive: boolean;
+  _count?: { vendorBookings?: number };
+}
+
+interface BookingSummary {
+  id: string;
+  bookingStatus: string;
+  paymentStatus: string;
+  totalAmount: number;
+  createdAt: string;
+  user?: { name?: string };
+  userSocialEvent?: { title?: string };
+}
+
 export default function VendorDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
   const [stats, setStats] = useState<VendorStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [vendorProfile, setVendorProfile] = useState<any>(null);
+  const [vendorProfile, setVendorProfile] = useState<VendorProfile | null>(null);
   const [greeting, setGreeting] = useState("");
 
   useEffect(() => {
     const hour = new Date().getHours();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (hour < 12) setGreeting("Good morning");
     else if (hour < 17) setGreeting("Good afternoon");
     else setGreeting("Good evening");
@@ -81,34 +107,40 @@ export default function VendorDashboard() {
         }
 
         const packagesRes = await fetch("/api/vendor/packages");
-        let packages = [];
+        let packages: PackageSummary[] = [];
         if (packagesRes.ok) {
           const packagesData = await packagesRes.json();
           packages = packagesData.packages || packagesData || [];
         }
 
         const bookingsRes = await fetch("/api/vendor/bookings");
-        let bookings = [];
+        let bookings: BookingSummary[] = [];
         if (bookingsRes.ok) {
           const bookingsData = await bookingsRes.json();
           bookings = bookingsData.bookings || bookingsData || [];
         }
 
         const totalPackages = packages.length;
-        const activePackages = packages.filter((p: any) => p.isActive).length;
+        const activePackages = packages.filter((p) => p.isActive).length;
         const totalBookings = bookings.length;
-        const pendingBookings = bookings.filter((b: any) => 
-          b.bookingStatus === "PENDING" || b.paymentStatus === "PENDING"
+        const pendingBookings = bookings.filter(
+          (b) =>
+            b.bookingStatus === "PENDING" || b.paymentStatus === "PENDING",
         ).length;
-        const completedBookings = bookings.filter((b: any) => 
-          b.bookingStatus === "COMPLETED" || b.paymentStatus === "COMPLETED"
+        const completedBookings = bookings.filter(
+          (b) =>
+            b.bookingStatus === "COMPLETED" || b.paymentStatus === "COMPLETED",
         ).length;
 
         const totalRevenue = bookings
-          .filter((b: any) => b.paymentStatus === "COMPLETED" || b.bookingStatus === "COMPLETED")
-          .reduce((sum: number, b: any) => sum + Number(b.totalAmount || 0), 0);
+          .filter(
+            (b) =>
+              b.paymentStatus === "COMPLETED" ||
+              b.bookingStatus === "COMPLETED",
+          )
+          .reduce((sum, b) => sum + Number(b.totalAmount || 0), 0);
 
-        const recentBookings = bookings.slice(0, 5).map((b: any) => ({
+        const recentBookings = bookings.slice(0, 5).map((b) => ({
           id: b.id,
           customerName: b.user?.name || "Customer",
           eventTitle: b.userSocialEvent?.title || "Social Event",
@@ -117,7 +149,7 @@ export default function VendorDashboard() {
           createdAt: b.createdAt,
         }));
 
-        const recentPackages = packages.slice(0, 5).map((p: any) => ({
+        const recentPackages = packages.slice(0, 5).map((p) => ({
           id: p.id,
           name: p.name,
           price: Number(p.price || 0),
@@ -384,7 +416,7 @@ export default function VendorDashboard() {
             <div className="text-center py-8">
               <p className="text-gray-500 dark:text-gray-400">No bookings yet</p>
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                When customers book your services, they'll appear here
+                When customers book your services, they&apos;ll appear here
               </p>
             </div>
           ) : (
@@ -480,7 +512,7 @@ export default function VendorDashboard() {
       {/* Footer */}
       <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700 text-center">
         <p className="text-xs text-gray-400 dark:text-gray-500">
-          EventFlow — Nepal's Event Management Platform
+          EventFlow — Nepal&apos;s Event Management Platform
         </p>
       </div>
     </div>

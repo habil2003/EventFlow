@@ -20,6 +20,19 @@ import {
 } from '@heroicons/react/24/outline'; 
 import { useState, useEffect } from 'react';
 
+function Logo({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <Link href="/" className="flex items-center space-x-3 group" onClick={onNavigate}>
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 shadow-lg transition-all group-hover:scale-105 group-hover:shadow-xl">
+        <span className="text-lg font-bold text-white">EF</span>
+      </div>
+      <span className="text-xl font-bold bg-gradient-to-r from-indigo-700 to-purple-700 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">
+        EventFlow
+      </span>
+    </Link>
+  );
+}
+
 export default function Navigation() {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -28,6 +41,7 @@ export default function Navigation() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -54,24 +68,13 @@ export default function Navigation() {
     return null;
   }
 
-  const Logo = () => (
-    <Link href="/" className="flex items-center space-x-3 group" onClick={() => setMobileMenuOpen(false)}>
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 shadow-lg transition-all group-hover:scale-105 group-hover:shadow-xl">
-        <span className="text-lg font-bold text-white">EF</span>
-      </div>
-      <span className="text-xl font-bold bg-gradient-to-r from-indigo-700 to-purple-700 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">
-        EventFlow
-      </span>
-    </Link>
-  );
-
   // Logged-out users
   if (!session) {
     return (
       <nav className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <Logo />
+            <Logo onNavigate={() => setMobileMenuOpen(false)} />
             <div className="flex items-center gap-3">
               <button onClick={toggleTheme} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
                 {theme === "light" ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5" />}
@@ -155,7 +158,7 @@ export default function Navigation() {
     <nav className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-700 shadow-sm">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <Logo />
+          <Logo onNavigate={() => setMobileMenuOpen(false)} />
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-1">

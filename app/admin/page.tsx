@@ -24,6 +24,38 @@ import {
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 
+interface DashboardUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+}
+
+interface DashboardVendor {
+  id: string;
+  userId: string;
+  businessName: string;
+  serviceType: string;
+  location: string;
+  status: string;
+  user?: {
+    name?: string;
+  };
+}
+
+interface DashboardOrganizer {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  createdAt: string;
+  _count?: {
+    organizedEvents?: number;
+  };
+}
+
 interface DashboardStats {
   totalUsers: number;
   totalVendors: number;
@@ -51,9 +83,9 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<
     "users" | "vendors" | "organizers"
   >("users");
-  const [users, setUsers] = useState<any[]>([]);
-  const [vendors, setVendors] = useState<any[]>([]);
-  const [organizers, setOrganizers] = useState<any[]>([]);
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [vendors, setVendors] = useState<DashboardVendor[]>([]);
+  const [organizers, setOrganizers] = useState<DashboardOrganizer[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{
     text: string;
@@ -62,7 +94,6 @@ export default function AdminDashboard() {
 
   // Commission state from commission API
   const [totalCommission, setTotalCommission] = useState(0);
-  const [totalReleased, setTotalReleased] = useState(0);
   const [payoutsCount, setPayoutsCount] = useState(0);
 
   useEffect(() => {
@@ -99,7 +130,6 @@ export default function AdminDashboard() {
         if (commissionRes.ok) {
           const commissionData = await commissionRes.json();
           setTotalCommission(commissionData.summary.totalCommission);
-          setTotalReleased(commissionData.summary.totalReleased);
           setPayoutsCount(commissionData.summary.totalPayouts);
         }
       } catch (error) {

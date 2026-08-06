@@ -13,6 +13,18 @@ interface PaymentButtonProps {
   onError?: (error: string) => void;
 }
 
+interface PaymentRequestBody {
+  gateway: NonNullable<PaymentButtonProps['gateway']>;
+  paymentType: PaymentButtonProps['paymentType'];
+  amount: number;
+  bookingId: string;
+  customerName: string;
+  customerEmail: string;
+  orderName: string;
+  returnUrl: string;
+  paymentIntentId?: string;
+}
+
 export default function PaymentButton({
   amount,
   bookingId,
@@ -56,7 +68,7 @@ export default function PaymentButton({
       console.log('📍 [PaymentButton] Booking ID:', bookingId);
 
       // ✅ Build request body
-      const requestBody: any = {
+      const requestBody: PaymentRequestBody = {
         gateway,
         paymentType,
         amount,

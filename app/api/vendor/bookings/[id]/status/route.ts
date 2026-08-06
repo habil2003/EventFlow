@@ -148,7 +148,7 @@ export async function PATCH(
           ? 'Booking declined. Refund has been initiated automatically.' 
           : 'Booking declined. No payment was made, so no refund is due.',
         refund: depositTransaction ? {
-          amount: Number(booking.depositAmount || booking.totalAmount * 0.2),
+          amount: Number(booking.depositAmount || Number(booking.totalAmount) * 0.2),
           status: 'PROCESSED',
         } : null,
       });

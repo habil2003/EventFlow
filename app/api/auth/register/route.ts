@@ -18,6 +18,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // ✅ SECURITY: Only allow self-registration with non-privileged roles.
+    // ADMIN (and any unknown role) must never be assignable via the public
+    // registration endpoint — otherwise an attacker could escalate privileges.
+    const allowedRoles = ["USER", "ORGANIZER", "VENDOR"];
+    if (!allowedRoles.includes(role)) {
+      return NextResponse.json(
+        { error: "Invalid role" },
+        { status: 400 }
+      );
+    }
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {

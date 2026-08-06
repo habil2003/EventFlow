@@ -2,8 +2,20 @@
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Refund } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+interface GatewayResponse {
+  refundPercentage?: number;
+  method?: string;
+  transferMethod?: string;
+  type?: string;
+  processedBy?: string;
+  processedAt?: string;
+  khaltiFee?: number;
+  platformKeeps?: number;
+}
 
 // Helper: Calculate refund percentage from amount
 function calculateRefundPercentageFromAmount(refundAmount: number, totalAmount: number): number | null {
@@ -26,8 +38,8 @@ function getRefundPercentageFromPolicy(daysUntilEvent: number): number {
 
 // Helper: Calculate refund percentage from data
 function calculateRefundPercentage(
-  refund: any,
-  gatewayResponse: any,
+  refund: Refund & { refundPercentage?: number },
+  gatewayResponse: GatewayResponse | null,
   refundAmount: number,
   totalAmount: number | null,
   daysUntilEvent: number | null,
@@ -41,8 +53,8 @@ function calculateRefundPercentage(
   }
 
   // 2. Try to get from refund object directly
-  if (percentage === null && (refund as any).refundPercentage !== undefined && (refund as any).refundPercentage !== null) {
-    percentage = (refund as any).refundPercentage;
+  if (percentage === null && refund.refundPercentage !== undefined && refund.refundPercentage !== null) {
+    percentage = refund.refundPercentage;
   }
 
   // 3. Calculate from amounts
@@ -64,7 +76,7 @@ function calculateRefundPercentage(
 }
 
 // ✅ Extract refund method - NO FALLBACKS
-function extractRefundMethod(gatewayResponse: any): string | null {
+function extractRefundMethod(gatewayResponse: GatewayResponse | null): string | null {
   if (!gatewayResponse) return null;
 
   // Check all possible fields where method could be stored
@@ -191,7 +203,7 @@ export async function GET() {
 
     // Format vendor refunds - NO FALLBACKS
     const formattedVendorRefunds = vendorRefunds.map((refund) => {
-      const gatewayResponse = refund.gatewayResponse as any;
+      const gatewayResponse = refund.gatewayResponse as unknown as GatewayResponse | null;
       
       const refundAmount = Number(refund.refundAmount);
       const totalAmount = refund.vendorBooking?.depositAmount 
@@ -251,7 +263,7 @@ export async function GET() {
 
     // Format ticket refunds - NO FALLBACKS
     const formattedTicketRefunds = ticketRefunds.map((refund) => {
-      const gatewayResponse = refund.gatewayResponse as any;
+      const gatewayResponse = refund.gatewayResponse as unknown as GatewayResponse | null;
       
       const refundAmount = Number(refund.refundAmount);
       const totalAmount = refund.ticketBooking?.totalAmount 

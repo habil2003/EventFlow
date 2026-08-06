@@ -52,6 +52,16 @@ export default function TicketDetailPage() {
   const [copied, setCopied] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
 
+  const generateSignature = (ticketId: string, hash: string, eventId: string) => {
+    const data = `${ticketId}-${hash}-${eventId}`;
+    let signature = 0;
+    for (let i = 0; i < data.length; i++) {
+      signature = ((signature << 5) - signature) + data.charCodeAt(i);
+      signature = signature & signature;
+    }
+    return signature.toString(36);
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
@@ -118,16 +128,6 @@ export default function TicketDetailPage() {
     
     fetchTicket();
   }, [params.id]);
-
-  const generateSignature = (ticketId: string, hash: string, eventId: string) => {
-    const data = `${ticketId}-${hash}-${eventId}`;
-    let signature = 0;
-    for (let i = 0; i < data.length; i++) {
-      signature = ((signature << 5) - signature) + data.charCodeAt(i);
-      signature = signature & signature;
-    }
-    return signature.toString(36);
-  };
 
   const copyTicketNumber = () => {
     if (ticket?.ticketNumber) {
@@ -459,7 +459,7 @@ export default function TicketDetailPage() {
             {!isCheckedIn && isUpcoming && isPaid && (
               <div className="mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
-                  📌 Keep this ticket handy. You'll need the QR code or ticket number for entry.
+                  📌 Keep this ticket handy. You&apos;ll need the QR code or ticket number for entry.
                 </p>
               </div>
             )}

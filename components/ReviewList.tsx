@@ -99,6 +99,7 @@ export default function ReviewList({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReviews();
   }, [vendorId, eventId, page, limit]);
 

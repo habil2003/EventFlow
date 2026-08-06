@@ -95,6 +95,7 @@ export default function CountdownTimer({ targetDate, targetTime }: CountdownTime
       }
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimeLeft(calculateTimeLeft());
 
     const timer = setInterval(() => {

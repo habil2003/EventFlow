@@ -142,6 +142,7 @@ function CountdownTimer({ targetDate, targetTime }: { targetDate: string | Date;
       }
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimeLeft(calculateTimeLeft());
 
     const timer = setInterval(() => {

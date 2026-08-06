@@ -59,7 +59,17 @@ export async function GET() {
       let refundPlatformKeeps = null;
 
       if (refund?.gatewayResponse) {
-        const gatewayResponse = refund.gatewayResponse as any;
+        const gatewayResponse = refund.gatewayResponse as unknown as {
+          method?: string;
+          processedBy?: string;
+          processedAt?: string;
+          refundPercentage?: number;
+          khaltiFee?: number;
+          platformKeeps?: number;
+          transferMethod?: string;
+          transactionReference?: string;
+          refundResult?: { method?: string };
+        };
         
         if (gatewayResponse.method === 'KHALTI_API') {
           refundMethod = 'KHALTI_API';

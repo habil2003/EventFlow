@@ -9,7 +9,6 @@ import {
   UsersIcon,
   ClockIcon,
   HomeIcon,
-  BanknotesIcon,
   ShieldCheckIcon,
   Bars3Icon,
   ChevronLeftIcon,
@@ -52,6 +51,7 @@ export default function AdminLayout({
 
   // Theme management
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -69,6 +69,7 @@ export default function AdminLayout({
 
   // Close mobile sidebar on route change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSidebarMobileOpen(false);
   }, [pathname]);
 

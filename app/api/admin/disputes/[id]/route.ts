@@ -140,9 +140,19 @@ export async function PATCH(
       include: {
         vendorBooking: {
           include: {
-            vendor: true,
+            vendor: {
+              include: {
+                user: {
+                  select: {
+                    name: true,
+                    email: true,
+                  },
+                },
+              },
+            },
             user: true,
             userSocialEvent: true,
+            payouts: true,
           },
         },
       },
@@ -194,11 +204,19 @@ export async function PATCH(
         where: {
           vendorBookingId: booking.id,
           paymentType: 'VENDOR_DEPOSIT',
-          status: 'SUCCESS',
+          status: 'COMPLETED', // ✅ Transaction status is 'COMPLETED', not 'SUCCESS'
         },
       });
 
-      if (depositTransaction) {
+      // ✅ FINANCE GUARD: Only create an automatic refund when the funds are
+      // still held by the platform. If the deposit was already released to the
+      // vendor, refunding it would be a double spend — the admin must settle
+      // that separately.
+      const fundsReleased =
+        booking.amountReleasedAt !== null ||
+        booking.payouts.some((p) => p.status === 'COMPLETED');
+
+      if (depositTransaction && !fundsReleased) {
         await prisma.refund.create({
           data: {
             originalTransactionId: depositTransaction.transactionId,
@@ -225,7 +243,7 @@ export async function PATCH(
             customerName: booking.user?.name || 'Customer',
             vendorName: booking.vendor?.businessName || 'Vendor',
             disputeId: dispute.id,
-            adminEmail: session.user.email,
+            adminEmail: session.user.email || '',
           });
         } catch (emailError) {
           console.error('Failed to notify admin for refund:', emailError);

@@ -332,7 +332,7 @@ export default function MyRefundsPage() {
           ].map((tab) => (
             <button
               key={tab.value}
-              onClick={() => setFilter(tab.value as any)}
+              onClick={() => setFilter(tab.value as "all" | "PROCESSED" | "PENDING_ADMIN" | "FAILED")}
               className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
                 filter === tab.value
                   ? "bg-indigo-600 text-white shadow-sm"
