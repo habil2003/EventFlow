@@ -5,7 +5,8 @@
 // Drives the running dev server over HTTP end-to-end:
 //   register → verify → login (4 roles) → ticketed event + purchase →
 //   vendor package → booking → deposit → accept → admin release → complete →
-//   customer confirm → admin payout verify → customer cancel.
+//   customer confirm → admin payout verify → customer cancel → reviews
+//   (VENDOR + ticketed EVENT) → cleanup.
 //
 // It deletes every row it creates so the database returns to baseline.
 // Opt-in: `pnpm test:scenario`. Skips (exit 0) if no server is reachable;
@@ -17,6 +18,7 @@
 // direct DB writes and clearly labelled "(simulated)".
 
 import { readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
@@ -59,12 +61,15 @@ const counts = [
   "TicketTier",
   "TicketReservation",
   "TicketBooking",
+  "Rating",
 ];
 
-const created = { users: [], transactions: [], reservations: [], bookingIds: [] };
+const created = { users: [], transactions: [], reservations: [], bookingIds: [], ticketIds: [], ratingIds: [] };
 let baseline = null;
 let eventId = null;
 let tierId = null;
+let purchaseTxId = null;
+let purchaseReservationId = null;
 
 const results = [];
 const record = (step, expect, got, ok) => {
@@ -280,6 +285,8 @@ async function main() {
     });
     if (pr.status === 200 && pr.data?.success) {
       console.log(`    (info) Khalti initiate ok: pidx=${pr.data.pidx}`);
+      purchaseTxId = pr.data.paymentIntentId;
+      purchaseReservationId = pr.data.reservationId;
       created.transactions.push(pr.data.paymentIntentId);
       created.reservations.push(pr.data.reservationId);
       const pendRes = await prisma.ticketReservation.count({ where: { eventId, status: "PENDING" } });
@@ -416,6 +423,82 @@ async function main() {
     }
   }
 
+  // ─────────────── 7. RATINGS & REVIEWS (VENDOR + TICKET EVENT) ───────────────
+  console.log("\n=== 7. RATINGS & REVIEWS (VENDOR + TICKET EVENT) ===");
+  const userId = (await prisma.user.findUnique({ where: { email: EMAIL("user") } })).id;
+
+  // 7a. Vendor review — booking from §5 is already COMPLETED + customerConfirmed,
+  //     so the real POST /api/ratings guard (completed booking) must pass.
+  if (bookingId && vendorProfile) {
+    const vr = await api("POST", "/api/ratings", {
+      jar: userJar,
+      body: { rating: 5, review: "Excellent catering, highly recommend!", vendorId: vendorProfile.id, bookingId },
+    });
+    record("user rates VENDOR (POST /api/ratings)", "201", vr.status, vr.status === 201);
+    const vendorRating = await prisma.rating.findFirst({
+      where: { userId, vendorId: vendorProfile.id, type: "VENDOR", vendorBookingId: bookingId },
+    });
+    record("vendor rating persisted (type/verified)", "VENDOR/true", vendorRating ? `${vendorRating.type}/${vendorRating.isVerified}` : "missing", vendorRating?.type === "VENDOR" && vendorRating?.isVerified === true);
+    if (vendorRating) created.ratingIds.push(vendorRating.id);
+
+    const vr2 = await api("POST", "/api/ratings", {
+      jar: userJar,
+      body: { rating: 4, review: "duplicate", vendorId: vendorProfile.id },
+    });
+    record("duplicate vendor rating rejected", "400", vr2.status, vr2.status === 400);
+  }
+
+  // 7b. EVENT review — the ticket was only initiated (real Khalti), so simulate the
+  //     remaining lifecycle in the DB: (a) complete the payment, (b) mint the ticket
+  //     as the payment-callback would, (c) check-in (future-dated event can't use the
+  //     real scanner). Event completion and the rating itself go through real routes.
+  if (eventId && tierId && purchaseTxId) {
+    const tier = await prisma.ticketTier.findFirst({ where: { eventId } });
+    await prisma.paymentTransaction.update({ where: { id: purchaseTxId }, data: { status: "COMPLETED" } });
+    const ticket = await prisma.ticketBooking.create({
+      data: {
+        userId,
+        eventId,
+        tierId: tier.id,
+        quantity: 1,
+        totalAmount: Number(tier.price),
+        ticketNumber: `TKT-SIM-${SUFFIX}`,
+        gateway: "KHALTI",
+        transactionId: `SIM_TKT_${SUFFIX}`,
+        qrCodeHash: randomBytes(32).toString("hex"),
+        paymentStatus: "COMPLETED",
+        paymentIntentId: purchaseTxId,
+        checkedIn: true,
+        checkedInAt: new Date(),
+      },
+    });
+    created.ticketIds.push(ticket.id);
+    console.log("    (simulated) payment completed + ticket minted + checked-in (DB)");
+    if (purchaseReservationId) {
+      await prisma.ticketReservation.deleteMany({ where: { id: purchaseReservationId } });
+    }
+
+    const comp = await api("PATCH", `/api/organizer/events/${eventId}/complete`, { jar: orgJar });
+    record("organizer mark event complete", "200", comp.status, comp.status === 200);
+
+    const er = await api("POST", "/api/ratings", {
+      jar: userJar,
+      body: { rating: 5, review: "Amazing event!", eventId },
+    });
+    record("user rates EVENT (POST /api/ratings)", "201", er.status, er.status === 201);
+    const eventRating = await prisma.rating.findFirst({
+      where: { userId, eventId, type: "EVENT", ticketBookingId: ticket.id },
+    });
+    record("event rating persisted (type/verified)", "EVENT/true", eventRating ? `${eventRating.type}/${eventRating.isVerified}` : "missing", eventRating?.type === "EVENT" && eventRating?.isVerified === true);
+    if (eventRating) created.ratingIds.push(eventRating.id);
+
+    const er2 = await api("POST", "/api/ratings", {
+      jar: userJar,
+      body: { rating: 3, review: "dup", eventId },
+    });
+    record("duplicate event rating rejected", "400", er2.status, er2.status === 400);
+  }
+
   const pass = results.filter((r) => r.ok).length;
   console.log(`\n=== SUMMARY: ${pass}/${results.length} PASSED ===`);
   if (pass !== results.length) process.exitCode = 1;
@@ -423,6 +506,12 @@ async function main() {
 
 async function cleanup() {
   console.log("\n=== CLEANUP ===");
+  if (created.ratingIds.length) {
+    await prisma.rating.deleteMany({ where: { id: { in: created.ratingIds } } });
+  }
+  if (created.ticketIds.length) {
+    await prisma.ticketBooking.deleteMany({ where: { id: { in: created.ticketIds } } });
+  }
   if (created.bookingIds.length) {
     await prisma.refund.deleteMany({ where: { vendorBookingId: { in: created.bookingIds } } });
     await prisma.payout.deleteMany({ where: { bookingId: { in: created.bookingIds } } });

@@ -194,15 +194,21 @@ sides — customer USER, ORGANIZER, VENDOR, ADMIN):
    auto-created, PENDING) → admin verify remaining payout (→ **COMPLETED**).
 8. **Customer cancel (pre-deposit):** second booking cancelled → `DECLINED`/`FAILED`,
    no refund due.
+9. **Ratings & reviews:** vendor review via real `POST /api/ratings` (201 after the
+   COMPLETED+confirmed booking, `isVerified=true`, duplicate → 400); event review via
+   real `POST /api/ratings` (201 after ticket minted/checked-in + event completed via
+   the real organizer-complete route; duplicate → 400). Ticket lifecycle is
+   DB-simulated (mirrors the payment-callback); the rating/complete routes are real.
 
-Housekeeping: prints baseline/after counts for 14 tables and asserts they match;
+Housekeeping: prints baseline/after counts for 15 tables and asserts they match;
 exits non-zero on any FAIL. Skips with exit 0 when no server is reachable.
 
-Last run (2026-08-06, live dev server + real Postgres): **35/35 PASSED**, all
-14 table counts restored to baseline. If Khalti initiation fails (no/invalid
+Last run (2026-08-06, live dev server + real Postgres): **42/42 PASSED**, all
+15 table counts restored to baseline. If Khalti initiation fails (no/invalid
 secret), the purchase step still asserts the server cleans up the reservation
-and the run stays green; the deposit lifecycle is intentionally DB-simulated
-because a Khalti checkout needs a human in the browser.
+and the run stays green; the deposit lifecycle and ticket payment are
+intentionally DB-simulated because a Khalti checkout needs a human in the
+browser.
 
 ### 3.1.4 Browser E2E smoke (Playwright, committed)
 

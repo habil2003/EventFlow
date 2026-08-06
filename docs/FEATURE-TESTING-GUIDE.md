@@ -70,19 +70,21 @@ what each feature's tests verify, and the **verified results** of the latest run
 | 31 | Full end-to-end, 4-role journey | real register → verify → login (**USER / ORGANIZER / VENDOR / ADMIN**) → event create → RBAC/IDOR → ticket purchase (Khalti sandbox) |
 | 32 | Vendor booking lifecycle | package create → customer book → deposit (real initiate + DB-simulated complete) → vendor accept → admin deposit release (escrow) → vendor complete → customer confirm (REMAINING payout auto-created) → admin verify payout (COMPLETED) |
 | 33 | Customer cancel (pre-deposit) | second booking cancelled → `DECLINED`/`FAILED`, no refund due |
-| 34 | Database hygiene | every created row deleted; **14 tables** returned to baseline |
+| 34 | Vendor review (real POST) | 201 after a COMPLETED + customer-confirmed booking; `type=VENDOR`, `isVerified=true`; duplicate → 400 |
+| 35 | Event review (real POST) | 201 only after attendance (ticket COMPLETED + checked-in + event completed — simulated lifecycle); duplicate → 400 |
+| 36 | Database hygiene | every created row deleted; **15 tables** returned to baseline |
 
 ### 1.8 Browser E2E (`E2E`)
 | # | Feature | Key checks |
 |---|---------|-----------|
-| 35 | Sign up (real UI) | fill the signup form as USER → "Check Your Email" success screen |
-| 36 | Email verify (link click) | verification token applied → `emailVerified` set |
-| 37 | Sign in (real UI) | submit login form → redirected to signed-in home page |
+| 37 | Sign up (real UI) | fill the signup form as USER → "Check Your Email" success screen |
+| 38 | Email verify (link click) | verification token applied → `emailVerified` set |
+| 39 | Sign in (real UI) | submit login form → redirected to signed-in home page |
 
 ### 1.9 CI / Automation
 | # | Item | What it does |
 |---|------|-------------|
-| 38 | `.github/workflows/ci.yml` | runs lint + typecheck + tests on every push/PR automatically |
+| 40 | `.github/workflows/ci.yml` | runs lint + typecheck + tests on every push/PR automatically |
 
 ---
 
@@ -114,7 +116,7 @@ pnpm lint
 ```bash
 pnpm test:scenario
 ```
-> Expect: `SUMMARY: 35/35 PASSED`, then every table prints `OK (baseline N)`.
+> Expect: `SUMMARY: 42/42 PASSED`, then every table prints `OK (baseline N)`.
 > Skips cleanly (exit 0) if no server is reachable.
 
 ### Step 5 — Run the browser E2E (optional, needs server)
@@ -148,7 +150,7 @@ Push to GitHub → `.github/workflows/ci.yml` runs Steps 1–3 automatically.
 | `tests/api/organizer.events.test.ts` | 4 | Event creation + RBAC (features 24–25) |
 | `tests/api/organizer.checkin-stats.test.ts` | 6 | IDOR fix — owner/admin only (feature 26) |
 | `tests/api/vendor.bookings.status.test.ts` | 12 | Booking lifecycle (features 27–30) |
-| `tests/scenarios/traffic-scenario.mjs` | 35 | Full real-DB 4-role journey + hygiene (features 31–34) |
+| `tests/scenarios/traffic-scenario.mjs` | 42 | Full real-DB 4-role journey + reviews + hygiene (features 31–36) |
 | `tests/e2e/auth-flow.spec.ts` | 1 | Browser signup → verify → signin (features 35–37) |
 
 ---
@@ -160,7 +162,7 @@ Push to GitHub → `.github/workflows/ci.yml` runs Steps 1–3 automatically.
 | Unit/API tests | `pnpm test` | **114/114 passed** (15 files) |
 | Type check | `npx tsc --noEmit` | **0 errors** |
 | Lint | `pnpm lint` | **0 errors** (210 pre-existing warnings) |
-| Real-DB scenario | `pnpm test:scenario` | **35/35 passed**; all 14 tables restored to baseline |
+| Real-DB scenario | `pnpm test:scenario` | **42/42 passed**; all 15 tables restored to baseline |
 | Browser E2E | `pnpm test:e2e` | **1/1 passed** (signup→verify→signin) |
 | CI | GitHub Actions | configured; runs lint + tsc + tests on push/PR |
 
