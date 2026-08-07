@@ -98,7 +98,7 @@ what each feature's tests verify, and the **verified results** of the latest run
 ```bash
 pnpm test
 ```
-> Expect: `Test Files 15 passed · Tests 114 passed`
+> Expect: `Test Files 15 passed · Tests 117 passed`
 
 ### Step 2 — Run the type check
 ```bash
@@ -139,7 +139,7 @@ Push to GitHub → `.github/workflows/ci.yml` runs Steps 1–3 automatically.
 | `tests/unit/payment.refund.test.ts` | 5 | Full/partial refunds, paisa body, already-refunded guard, manual fallback |
 | `tests/unit/refund-calculators.test.ts` | 6 | 100/50/0% refund policy + exact math |
 | `tests/unit/auth.login.test.ts` | 9 | Login rules (feature 6) + session role refresh (feature 7) |
-| `tests/api/auth.register.test.ts` | 8 | Registration + role whitelist (features 1–3) |
+| `tests/api/auth.register.test.ts` | 11 | Registration + role whitelist + vendor service-type validation (features 1–3) |
 | `tests/api/auth.verify-email.test.ts` | 6 | Verification + role→status mapping (features 4–5) |
 | `tests/api/payment.verify.test.ts` | 6 | Server-side verify + amount reconcile (feature 10) |
 | `tests/api/tickets.payment-callback.test.ts` | 6 | Minting only on verified Completed (feature 11) |
@@ -152,6 +152,7 @@ Push to GitHub → `.github/workflows/ci.yml` runs Steps 1–3 automatically.
 | `tests/api/vendor.bookings.status.test.ts` | 12 | Booking lifecycle (features 27–30) |
 | `tests/scenarios/traffic-scenario.mjs` | 42 | Full real-DB 4-role journey + reviews + hygiene (features 31–36) |
 | `tests/e2e/auth-flow.spec.ts` | 1 | Browser signup → verify → signin (features 35–37) |
+| `tests/e2e/review-flow.spec.ts` | 1 | Browser review UI renders + submits + landing testimonials → reviews page (features 35–36) |
 
 ---
 
@@ -159,11 +160,11 @@ Push to GitHub → `.github/workflows/ci.yml` runs Steps 1–3 automatically.
 
 | Gate | Command | Result |
 |------|---------|--------|
-| Unit/API tests | `pnpm test` | **114/114 passed** (15 files) |
+| Unit/API tests | `pnpm test` | **117/117 passed** (15 files) |
 | Type check | `npx tsc --noEmit` | **0 errors** |
 | Lint | `pnpm lint` | **0 errors** (210 pre-existing warnings) |
 | Real-DB scenario | `pnpm test:scenario` | **42/42 passed**; all 15 tables restored to baseline |
-| Browser E2E | `pnpm test:e2e` | **1/1 passed** (signup→verify→signin) |
+| Browser E2E | `pnpm test:e2e` | **2/2 passed** (auth + review flows) |
 | CI | GitHub Actions | configured; runs lint + tsc + tests on push/PR |
 
 ---
@@ -172,8 +173,8 @@ Push to GitHub → `.github/workflows/ci.yml` runs Steps 1–3 automatically.
 
 - **Component (React) tests** — not installed; covers admin payout image, escrow
   bulk actions, refund badges.
-- **Browser E2E breadth** — currently the auth smoke only; the money flows
-  (buy ticket, vendor deposit/remaining/full payout) are covered by the real-DB
-  scenario instead of the browser.
+- **Browser E2E breadth** — auth + review flows are covered in the browser; the
+  money flows (buy ticket, vendor deposit/remaining/full payout) are covered by
+  the real-DB scenario instead of the browser.
 - Both are additive; the security-critical and money-moving logic is fully
   covered by the suite above.

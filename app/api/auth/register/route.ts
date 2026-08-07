@@ -106,11 +106,27 @@ export async function POST(request: Request) {
         );
       }
 
+      // ✅ SECURITY: serviceType must be a known, active service type slug.
+      // The client sends the slug (e.g. "catering"); normalize and validate
+      // against the admin-managed ServiceType table to prevent junk values.
+      const serviceTypeSlug = String(serviceType).trim().toLowerCase();
+      const serviceTypeRecord = await prisma.serviceType.findUnique({
+        where: { id: serviceTypeSlug },
+      });
+
+      if (!serviceTypeRecord || !serviceTypeRecord.isActive) {
+        await prisma.user.delete({ where: { id: user.id } });
+        return NextResponse.json(
+          { error: "Invalid or unavailable service type" },
+          { status: 400 }
+        );
+      }
+
       await prisma.vendorProfile.create({
         data: {
           userId: user.id,
           businessName,
-          serviceType,
+          serviceType: serviceTypeSlug,
           location,
           description: description || null,
         },

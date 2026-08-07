@@ -33,6 +33,10 @@ const serviceTypes = [
   { value: "decoration", label: "🎨 Decoration" },
   { value: "makeup", label: "💄 Makeup Artist" },
   { value: "dj", label: "🎧 DJ / Music" },
+  { value: "transport", label: "🚐 Transport" },
+  { value: "invitation", label: "💌 Invitations" },
+  { value: "fashion", label: "👗 Fashion / Attire" },
+  { value: "gifts", label: "🎁 Gifts & Favors" },
 ];
 
 const businessTypes = [
@@ -80,6 +84,8 @@ export default function SignupPage() {
   const [serviceType, setServiceType] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [serviceTypeOptions, setServiceTypeOptions] =
+    useState<{ value: string; label: string }[]>(serviceTypes);
   
   // UI state
   const [showPassword, setShowPassword] = useState(false);
@@ -109,6 +115,31 @@ export default function SignupPage() {
     localStorage.setItem("theme", newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
+
+  // Load service types from the DB (admin-managed); fall back to static list.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/service-types");
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled && Array.isArray(data.data) && data.data.length > 0) {
+          setServiceTypeOptions(
+            data.data.map((st: { id: string; label: string; emoji: string }) => ({
+              value: st.id,
+              label: `${st.emoji} ${st.label}`,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load service types:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -444,7 +475,7 @@ export default function SignupPage() {
                         className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-4 py-2.5 text-gray-900 dark:text-white focus:border-indigo-500 focus:bg-white dark:focus:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-200 transition-all"
                       >
                         <option value="">Select service type</option>
-                        {serviceTypes.map((st) => (
+                        {serviceTypeOptions.map((st) => (
                           <option key={st.value} value={st.value}>{st.label}</option>
                         ))}
                       </select>

@@ -119,7 +119,7 @@ Suggested `package.json` scripts:
 
 ## 3.1 Implementation & Current Results
 
-### 3.1.1 Automated suite (Vitest) — PASSING 114/114
+### 3.1.1 Automated suite (Vitest) — PASSING 117/117
 Test inventory implemented so far (see §5 for full case details):
 
 | File | Cases | Coverage |
@@ -127,7 +127,7 @@ Test inventory implemented so far (see §5 for full case details):
 | `tests/unit/payment.khalti.test.ts` | 6 | initiate/verify: paisa conversion, auth header, failure modes |
 | `tests/unit/payment.refund.test.ts` | 5 | full/partial refund, paisa body, already-refunded, manual fallback |
 | `tests/unit/refund-calculators.test.ts` | 6 | 100/50/0% policy + refund-amount math |
-| `tests/api/auth.register.test.ts` | 8 | role whitelist (ADMIN rejected), duplicate email, organizer cleanup |
+| `tests/api/auth.register.test.ts` | 11 | role whitelist (ADMIN rejected), duplicate email, organizer cleanup, vendor service-type validation (valid slug normalized, unknown/inactive rejected) |
 | `tests/api/payment.verify.test.ts` | 6 | gateway-verify gating, amount reconciliation, idempotency |
 | `tests/api/tickets.payment-callback.test.ts` | 6 | ticket minting only on verified Completed + matching amount |
 | `tests/api/admin.release-funds.test.ts` | 6 | DB-derived amounts (ignores tampered body), guards, RBAC |
@@ -142,7 +142,7 @@ Test inventory implemented so far (see §5 for full case details):
 | `tests/unit/auth.login.test.ts` | 9 | authorize: valid/wrong-password/unverified/BLOCKED/PENDING/unknown/missing; session role-refresh (SEC-4) + token fallback |
 | `tests/api/vendor.bookings.status.test.ts` | 12 | BK-001 accept (deposit gate), BK-002 decline auto-refund, BK-003 complete→remaining payout, RBAC, transitions |
 
-- **Gate status:** `pnpm test` → 15 files / 114 tests pass · `npx tsc --noEmit` → 0 errors · `npx eslint tests` → 0 problems.
+- **Gate status:** `pnpm test` → 15 files / 117 tests pass · `npx tsc --noEmit` → 0 errors · `npx eslint tests` → 0 problems.
 - **Design note:** API handlers are invoked as functions with mocked `@/lib/prisma`, `next-auth`, and `@/lib/payment/khalti` (via `vi.hoisted`). No external services or real DB writes are involved — fully deterministic.
 
 ### 3.1.2 Real-traffic smoke pass (live server + real DB)
@@ -221,9 +221,21 @@ browser.
 `tests/e2e/auth-flow.spec.ts` drives the **real UI** in a headless browser:
 sign up (USER) → read the verification token from the DB and call
 `verify-email` (mimics clicking the emailed link) → sign in through the login
-form → asserts the signed-in home page. Last run (2026-08-06): **1/1 passed**
-(10.3s). This covers E2E-006 (role gate) indirectly and lays the harness for
-E2E-001..E2E-005.
+form → asserts the signed-in home page. This covers E2E-006 (role gate)
+indirectly and lays the harness for E2E-001..E2E-005.
+
+`tests/e2e/review-flow.spec.ts` proves the rating/review UI actually renders and
+submits once a user is *eligible*: it signs up a reviewer, seeds (via Prisma) a
+`COMPLETED` + `customerConfirmed` + `vendorMarkedComplete` vendor booking and a
+paid/`checkedIn` ticket for a completed past event, then in the browser asserts
+the **Write Review** button on `/my-bookings?tab=past` and the **Review Event**
+button on `/my-tickets`, opens each modal, submits a review, and asserts the
+`Rating` rows persist with `isVerified: true`. Regression coverage for the bug
+where `/api/user/vendor-bookings` omitted `customerConfirmed` /
+`vendorMarkedComplete` / `vendorId`, so the buttons never appeared and the POST
+failed with `Either vendorId or eventId is required`.
+
+Last run (2026-08-06): **2/2 passed** (`pnpm test:e2e`).
 
 ---
 

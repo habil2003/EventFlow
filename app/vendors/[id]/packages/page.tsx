@@ -48,6 +48,8 @@ interface Vendor {
   id: string;
   businessName: string;
   serviceType: string;
+  serviceTypeLabel?: string;
+  serviceTypeEmoji?: string;
   location: string;
   description: string;
   imageUrl: string | null;
@@ -98,6 +100,19 @@ function VendorPackagesContent() {
   const eventTitle = searchParams.get("eventTitle");
   const eventDate = searchParams.get("eventDate");
   const guestCount = searchParams.get("guestCount");
+  const isFromLanding = searchParams.get("from") === "landing";
+
+  const requireLogin = () => {
+    if (!session) {
+      router.push(
+        `/login?callbackUrl=${encodeURIComponent(
+          window.location.pathname + window.location.search,
+        )}`,
+      );
+      return true;
+    }
+    return false;
+  };
 
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [loading, setLoading] = useState(true);
@@ -204,7 +219,7 @@ function VendorPackagesContent() {
         
         {/* === BACK BUTTON === */}
         <Link
-          href={buildMarketplaceUrl()}
+          href={isFromLanding && !session ? "/login" : buildMarketplaceUrl()}
           className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors mb-6"
         >
           <ArrowLeftIcon className="h-4 w-4" />
@@ -220,7 +235,7 @@ function VendorPackagesContent() {
                 <img src={vendor.imageUrl} alt={vendor.businessName} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-3xl">
-                  {getServiceEmoji(vendor.serviceType)}
+                  {vendor.serviceTypeEmoji || getServiceEmoji(vendor.serviceType)}
                 </div>
               )}
             </div>
@@ -231,7 +246,7 @@ function VendorPackagesContent() {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">
                   {vendor.businessName}
                 </h1>
-                <span className="text-2xl">{getServiceEmoji(vendor.serviceType)}</span>
+                <span className="text-2xl">{vendor.serviceTypeEmoji || getServiceEmoji(vendor.serviceType)}</span>
                 {vendor.rating && (
                   <span className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full text-sm">
                     <StarSolidIcon className="h-4 w-4 text-amber-500" />
@@ -372,7 +387,10 @@ function VendorPackagesContent() {
                   {/* Actions */}
                   <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex gap-2">
                     <button
-                      onClick={() => openPackageModal(pkg)}
+                      onClick={() => {
+                        if (isFromLanding && requireLogin()) return;
+                        openPackageModal(pkg);
+                      }}
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
                     >
                       <EyeIcon className="h-4 w-4" />
@@ -380,6 +398,16 @@ function VendorPackagesContent() {
                     </button>
                     <Link
                       href={buildBookingUrl(pkg.id)}
+                      onClick={(e) => {
+                        if (isFromLanding && !session) {
+                          e.preventDefault();
+                          router.push(
+                            `/login?callbackUrl=${encodeURIComponent(
+                              buildBookingUrl(pkg.id),
+                            )}`,
+                          );
+                        }
+                      }}
                       className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-md hover:scale-[1.02] transition-all text-sm font-medium"
                     >
                       <ShoppingCartIcon className="h-4 w-4" />
@@ -534,7 +562,17 @@ function VendorPackagesContent() {
                   </button>
                   <Link
                     href={buildBookingUrl(selectedPackage.id)}
-                    onClick={closePackageModal}
+                    onClick={(e) => {
+                      closePackageModal();
+                      if (isFromLanding && !session) {
+                        e.preventDefault();
+                        router.push(
+                          `/login?callbackUrl=${encodeURIComponent(
+                            buildBookingUrl(selectedPackage.id),
+                          )}`,
+                        );
+                      }
+                    }}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all font-medium"
                   >
                     <ShoppingCartIcon className="h-5 w-5" />

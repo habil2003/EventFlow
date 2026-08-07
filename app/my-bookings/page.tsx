@@ -7,6 +7,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 
 import ReviewForm from "@/components/ReviewForm";
+import { DEFAULT_SERVICE_TYPES } from "@/lib/service-types";
 
 import {
   BuildingOfficeIcon,
@@ -63,6 +64,7 @@ interface VendorBooking {
   remainingPaidAt?: string;
   customerConfirmed?: boolean; // ← ADD THIS
   vendorMarkedComplete?: boolean; // ← ADD THIS
+  hasReviewed?: boolean;
 }
 
 interface UmbrellaEvent {
@@ -89,16 +91,7 @@ interface FilterState {
   maxAmount: number | null;
 }
 
-const SERVICE_TYPES = [
-  "catering",
-  "venue",
-  "photography",
-  "decoration",
-  "music",
-  "florist",
-  "transport",
-  "other",
-];
+const SERVICE_TYPES = DEFAULT_SERVICE_TYPES.map((s) => s.id);
 const BOOKING_STATUSES = ["PENDING", "ACCEPTED", "DECLINED", "COMPLETED"];
 const PAYMENT_STATUSES = ["PENDING", "DEPOSIT_PAID", "FULLY_PAID"];
 
@@ -200,7 +193,7 @@ function BookingsContent() {
       }
     };
     fetchData();
-  }, []);
+  }, [refreshTrigger]);
 
   const handleCancelBooking = async (bookingId: string) => {
     const reason = prompt(
@@ -818,7 +811,7 @@ function BookingsContent() {
                           }}
                           className={`px-2 py-1 text-xs rounded-full transition-colors ${tempFilters.serviceType.includes(type) ? "bg-indigo-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
                         >
-                          {type}
+                          {DEFAULT_SERVICE_TYPES.find((s) => s.id === type)?.label || type}
                         </button>
                       ))}
                     </div>
@@ -1511,7 +1504,8 @@ function BookingsContent() {
                   const canReview =
                     isCompleted &&
                     booking.customerConfirmed === true &&
-                    booking.vendorMarkedComplete === true;
+                    booking.vendorMarkedComplete === true &&
+                    !booking.hasReviewed;
 
                   return (
                     <div
@@ -1596,6 +1590,14 @@ function BookingsContent() {
                             </button>
                           )}
 
+                          {/* ✅ Show if already reviewed */}
+                          {booking.hasReviewed && (
+                            <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                              <CheckCircleIcon className="h-3 w-3" />
+                              Reviewed ✓
+                            </span>
+                          )}
+
                           <Link
                             href={`/bookings/${booking.id}?returnTo=${activeView}`}
                             className="text-indigo-600 dark:text-indigo-400 text-sm hover:underline"
@@ -1619,7 +1621,8 @@ function BookingsContent() {
                   const canReview =
                     isCompleted &&
                     booking.customerConfirmed === true &&
-                    booking.vendorMarkedComplete === true;
+                    booking.vendorMarkedComplete === true &&
+                    !booking.hasReviewed;
 
                   return (
                     <div
@@ -1661,6 +1664,13 @@ function BookingsContent() {
                             <PencilIcon className="h-3 w-3" />
                             Write Review
                           </button>
+                        )}
+                        {/* ✅ Show if already reviewed */}
+                        {booking.hasReviewed && (
+                          <span className="flex items-center justify-center gap-1 text-xs text-green-600 dark:text-green-400">
+                            <CheckCircleIcon className="h-3 w-3" />
+                            Reviewed ✓
+                          </span>
                         )}
                         <Link
                           href={`/bookings/${booking.id}?returnTo=${activeView}`}

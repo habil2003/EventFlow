@@ -32,6 +32,7 @@ import {
   CreditCardIcon,
   ReceiptRefundIcon,
   ScaleIcon,
+  TagIcon,
 } from "@heroicons/react/24/outline";
 
 export default function AdminLayout({
@@ -144,6 +145,7 @@ export default function AdminLayout({
       category: 'Settings',
       items: [
         { href: '/admin/settings', label: 'Platform Settings', icon: Cog6ToothIcon },
+        { href: '/admin/service-types', label: 'Service Types', icon: TagIcon },
         { href: '/admin/email-templates', label: 'Email Templates', icon: EnvelopeIcon },
         { href: '/admin/profile', label: 'My Profile', icon: UserCircleIcon },
       ],

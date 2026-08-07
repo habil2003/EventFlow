@@ -10,6 +10,7 @@ const { prisma } = vi.hoisted(() => {
     "organizerProfile",
     "vendorProfile",
     "verificationToken",
+    "serviceType",
   ];
   for (const n of namespaces) {
     prisma[n] = new Proxy(
@@ -34,7 +35,7 @@ const URL = "http://localhost:3000/api/auth/register";
 
 function resetMocks() {
   vi.clearAllMocks();
-  for (const n of ["user", "organizerProfile", "vendorProfile", "verificationToken"]) {
+  for (const n of ["user", "organizerProfile", "vendorProfile", "verificationToken", "serviceType"]) {
     for (const k of Object.keys(prisma[n])) prisma[n][k].mockReset?.();
   }
 }
@@ -139,5 +140,58 @@ describe("POST /api/auth/register", () => {
     expect(statusOf(res)).toBe(400);
     expect((await readJson(res)).error).toMatch(/Business name/i);
     expect(prisma.user.delete).toHaveBeenCalled();
+  });
+
+  it("rejects a vendor service type that is not a known active slug", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({ id: "v1", role: "VENDOR", name: "V", email: "v@b.com", passwordHash: "h", status: "PENDING" });
+    prisma.user.delete.mockResolvedValue({});
+    prisma.serviceType.findUnique.mockResolvedValue(null);
+
+    const res = await POST(
+      jsonRequest(URL, {
+        name: "V", email: "v@b.com", password: "pass", role: "VENDOR",
+        businessName: "Acme", serviceType: "made-up", location: "Kathmandu",
+      })
+    );
+    expect(statusOf(res)).toBe(400);
+    expect((await readJson(res)).error).toMatch(/service type/i);
+    expect(prisma.user.delete).toHaveBeenCalled();
+    expect(prisma.vendorProfile.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inactive vendor service type", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({ id: "v1", role: "VENDOR", name: "V", email: "v@b.com", passwordHash: "h", status: "PENDING" });
+    prisma.user.delete.mockResolvedValue({});
+    prisma.serviceType.findUnique.mockResolvedValue({ id: "catering", isActive: false });
+
+    const res = await POST(
+      jsonRequest(URL, {
+        name: "V", email: "v@b.com", password: "pass", role: "VENDOR",
+        businessName: "Acme", serviceType: "catering", location: "Kathmandu",
+      })
+    );
+    expect(statusOf(res)).toBe(400);
+    expect((await readJson(res)).error).toMatch(/service type/i);
+  });
+
+  it("normalizes and stores a valid vendor service type slug", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({ id: "v1", role: "VENDOR", name: "V", email: "v@b.com", passwordHash: "h", status: "PENDING" });
+    prisma.serviceType.findUnique.mockResolvedValue({ id: "catering", isActive: true });
+    prisma.vendorProfile.create.mockResolvedValue({ id: "vp1" });
+    prisma.user.delete.mockResolvedValue({});
+
+    const res = await POST(
+      jsonRequest(URL, {
+        name: "V", email: "v@b.com", password: "pass", role: "VENDOR",
+        businessName: "Acme", serviceType: "CATERING", location: "Kathmandu",
+      })
+    );
+    expect(statusOf(res)).toBe(201);
+    expect(prisma.serviceType.findUnique).toHaveBeenCalledWith({ where: { id: "catering" } });
+    const createCall = prisma.vendorProfile.create.mock.calls[0][0];
+    expect(createCall.data.serviceType).toBe("catering");
   });
 });

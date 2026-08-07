@@ -216,6 +216,22 @@ model TicketReservation {
 }
 
 // ==========================================
+// 3.5 SERVICE TYPES (admin-managed vendor categories)
+// ==========================================
+
+model ServiceType {
+  id        String   @id
+  label     String
+  emoji     String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// ==========================================
 // 4. SOCIAL EVENTS & VENDOR MODULE
 // ==========================================
 

@@ -218,6 +218,10 @@ export default function EventDetailPage() {
   const [existingEventReview, setExistingEventReview] = useState<{ id: string; rating: number; review: string | null } | null>(null);
   const [eventReviewStats, setEventReviewStats] = useState<{ average: number; total: number } | null>(null);
   const [refreshEventReviews, setRefreshEventReviews] = useState(0);
+  const [isFromLanding] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("from") === "landing";
+  });
 
   // Get event ID from params
   useEffect(() => {
@@ -328,7 +332,11 @@ export default function EventDetailPage() {
 
   // Check if user is organizer
   const isOrganizer = session?.user?.id === event?.organizer?.id;
-  const backUrl = isOrganizer ? "/organizer/events" : "/events";
+  const backUrl = isOrganizer
+    ? "/organizer/events"
+    : isFromLanding && !session
+      ? "/login"
+      : "/events";
   const backLabel = isOrganizer ? "Back to My Events" : "Back to Events";
 
   // Updated handlePurchase function
@@ -635,7 +643,10 @@ export default function EventDetailPage() {
               </div>
 
               {/* ✅ ADD: Ratings & Reviews Section */}
-              <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
+              <div
+                id="reviews"
+                className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 scroll-mt-24"
+              >
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                     <StarSolid className="h-5 w-5 text-yellow-400" />
@@ -823,7 +834,7 @@ export default function EventDetailPage() {
                       ) : (
                         <>
                           <CreditCardIcon className="h-5 w-5" />
-                          Purchase Now
+                          Buy Tickets
                         </>
                       )}
                     </button>

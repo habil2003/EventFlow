@@ -26,6 +26,8 @@ interface Vendor {
   id: string;
   businessName: string;
   serviceType: string;
+  serviceTypeLabel?: string;
+  serviceTypeEmoji?: string;
   location: string;
   description: string;
   imageUrl: string | null;
@@ -386,7 +388,7 @@ function MarketplaceContent() {
                     <div className="p-5 flex-1 flex flex-col">
                       <div className="flex items-center justify-between mb-2">
                         <div className="text-3xl">
-                          {getServiceIcon(vendor.serviceType)}
+                          {vendor.serviceTypeEmoji || getServiceIcon(vendor.serviceType)}
                         </div>
                         {/* ✅ IMPROVED: Rating Display with Stars */}
                         <div className="flex items-center gap-1">

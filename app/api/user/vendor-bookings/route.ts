@@ -35,6 +35,17 @@ export async function GET() {
       },
     });
 
+    const reviewedBookingIds = new Set(
+      (
+        await prisma.rating.findMany({
+          where: {
+            vendorBookingId: { in: bookings.map((b) => b.id) },
+          },
+          select: { vendorBookingId: true },
+        })
+      ).map((r) => r.vendorBookingId),
+    );
+
     const formattedBookings = bookings.map((booking) => {
       const refund = booking.refunds[0];
       
@@ -111,6 +122,7 @@ export async function GET() {
 
       return {
         id: booking.id,
+        vendorId: booking.vendorId,
         vendorName: booking.vendor.businessName,
         serviceType: booking.vendor.serviceType,
         packageName: booking.servicePackage.name,
@@ -156,9 +168,15 @@ export async function GET() {
         refundPlatformKeeps: refundPlatformKeeps,
         
         // Cancellation fields
+        // Cancellation fields
         cancelledBy: booking.cancelledBy,
         cancellationReason: booking.cancellationReason,
         cancelledAt: booking.cancelledAt,
+
+        // ✅ Review eligibility flags
+        customerConfirmed: booking.customerConfirmed,
+        vendorMarkedComplete: booking.vendorMarkedComplete,
+        hasReviewed: reviewedBookingIds.has(booking.id),
       };
     });
 

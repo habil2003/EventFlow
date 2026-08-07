@@ -5,6 +5,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import RatingStars from "@/components/RatingStars";
 import {
   CalendarIcon,
   TicketIcon,
@@ -58,6 +59,17 @@ interface Vendor {
   reviewCount?: number;
 }
 
+interface Testimonial {
+  id: string;
+  rating: number;
+  review: string;
+  type: "VENDOR" | "EVENT";
+  entityId: string;
+  entityName: string;
+  reviewerName: string;
+  reviewDate: string;
+}
+
 export default function HomePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -65,6 +77,7 @@ export default function HomePage() {
   const [mounted, setMounted] = useState(false);
   const [featuredEvents, setFeaturedEvents] = useState<Event[]>([]);
   const [featuredVendors, setFeaturedVendors] = useState<Vendor[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalEvents: 0,
@@ -181,6 +194,14 @@ export default function HomePage() {
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData);
+        }
+
+        const testimonialsRes = await fetch("/api/public/testimonials?limit=6");
+        if (testimonialsRes.ok) {
+          const tData = await testimonialsRes.json();
+          if (tData?.data && Array.isArray(tData.data)) {
+            setTestimonials(tData.data);
+          }
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -849,6 +870,77 @@ export default function HomePage() {
                     </motion.div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Customer Reviews Section (real, verified testimonials) */}
+        {testimonials.length > 0 && (
+          <div className="bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 py-16">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                className="flex items-center justify-between mb-8"
+              >
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <ChatBubbleLeftRightIcon className="h-6 w-6 text-indigo-500" />
+                    What Customers Say
+                  </h2>
+                  <p className="text-gray-500 dark:text-gray-400 mt-1">
+                    Reviews from real bookings and attended events
+                  </p>
+                </div>
+              </motion.div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {testimonials.map((t, idx) => (
+                  <motion.div
+                    key={t.id}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.08, type: "spring" }}
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 flex flex-col h-full"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <RatingStars rating={t.rating} size="sm" />
+                      <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                        <CheckCircleIcon className="h-3.5 w-3.5" />
+                        Verified
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-gray-700 dark:text-gray-300 flex-1 line-clamp-4 italic">
+                      “{t.review}”
+                    </p>
+
+                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {t.reviewerName}
+                          </p>
+                          <Link
+                            href={
+                              t.type === "VENDOR"
+                                ? `/vendors/${t.entityId}/packages?from=landing`
+                                : `/events/${t.entityId}?from=landing`
+                            }
+                            className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                          >
+                            {t.type === "VENDOR" ? "Vendor: " : "Event: "}
+                            {t.entityName}
+                          </Link>
+                        </div>
+                        <StarSolid className="h-4 w-4 text-yellow-400" />
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </div>
           </div>

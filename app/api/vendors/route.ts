@@ -5,9 +5,12 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    await getServerSession(authOptions);
     const url = new URL(request.url);
     const limit = url.searchParams.get("limit");
+
+    const serviceTypes = await prisma.serviceType.findMany();
+    const serviceTypeMap = new Map(serviceTypes.map((s) => [s.id, s]));
 
     const vendors = await prisma.vendorProfile.findMany({
       where: {
@@ -55,6 +58,8 @@ export async function GET(request: Request) {
         id: vendor.id,
         businessName: vendor.businessName,
         serviceType: vendor.serviceType,
+        serviceTypeLabel: serviceTypeMap.get(vendor.serviceType)?.label ?? vendor.serviceType,
+        serviceTypeEmoji: serviceTypeMap.get(vendor.serviceType)?.emoji ?? "🏪",
         location: vendor.location,
         description: vendor.description,
         imageUrl: vendor.imageUrl,

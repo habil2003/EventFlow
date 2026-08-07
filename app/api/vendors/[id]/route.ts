@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
+    await getServerSession(authOptions);
 
     const vendor = await prisma.vendorProfile.findUnique({
       where: {
@@ -40,10 +40,16 @@ export async function GET(
       );
     }
 
+    const serviceType = await prisma.serviceType.findUnique({
+      where: { id: vendor.serviceType },
+    });
+
     const formattedVendor = {
       id: vendor.id,
       businessName: vendor.businessName,
       serviceType: vendor.serviceType,
+      serviceTypeLabel: serviceType?.label ?? vendor.serviceType,
+      serviceTypeEmoji: serviceType?.emoji ?? "🏪",
       location: vendor.location,
       description: vendor.description,
       imageUrl: vendor.imageUrl,

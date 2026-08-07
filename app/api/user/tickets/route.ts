@@ -32,6 +32,17 @@ export async function GET() {
       },
     });
 
+    const reviewedTicketIds = new Set(
+      (
+        await prisma.rating.findMany({
+          where: {
+            ticketBookingId: { in: tickets.map((t) => t.id) },
+          },
+          select: { ticketBookingId: true },
+        })
+      ).map((r) => r.ticketBookingId),
+    );
+
     const formattedTickets = tickets.map((ticket) => {
       const latestRefund = ticket.refunds[0] ?? null;
 
@@ -54,6 +65,7 @@ export async function GET() {
         createdAt: ticket.createdAt,
         paymentIntentId: ticket.paymentIntentId,
         paymentStatus: ticket.paymentStatus,
+        hasReviewed: reviewedTicketIds.has(ticket.id),
         // ✅ Refund fields
         refundStatus: latestRefund?.refundStatus ?? null,
         refundAmount: latestRefund ? Number(latestRefund.refundAmount) : null,
