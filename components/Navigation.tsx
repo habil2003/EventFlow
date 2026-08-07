@@ -12,7 +12,6 @@ import {
   ChartBarIcon,
   MoonIcon,
   SunIcon,
-  CurrencyRupeeIcon,
   Bars3Icon,
   XMarkIcon,
   ClockIcon,
@@ -102,7 +101,7 @@ export default function Navigation() {
     if (role === 'ADMIN') {
       return [
         { href: '/admin', label: 'Dashboard', icon: ChartBarIcon },
-        { href: '/admin/escrow', label: 'Escrow', icon: CurrencyRupeeIcon },
+        { href: '/admin/escrow', label: 'Escrow', icon: BanknotesIcon },
         { href: '/admin/refunds', label: 'Refunds', icon: BanknotesIcon },
         { href: '/admin/approvals', label: 'Approvals', icon: ClockIcon },
         ...commonLinks,
@@ -114,7 +113,7 @@ export default function Navigation() {
         { href: '/vendor', label: 'Dashboard', icon: BuildingOfficeIcon },
         { href: '/vendor/bookings', label: 'Bookings', icon: CalendarIcon },
         { href: '/vendor/packages', label: 'Packages', icon: TicketIcon },
-        { href: '/vendor/payouts', label: 'Payouts', icon: CurrencyRupeeIcon },
+        { href: '/vendor/payouts', label: 'Payouts', icon: BanknotesIcon },
         ...commonLinks,
       ];
     }
@@ -124,7 +123,7 @@ export default function Navigation() {
         { href: '/organizer', label: 'Dashboard', icon: BuildingOfficeIcon },
         { href: '/organizer/events', label: 'Events', icon: CalendarIcon },
         { href: '/organizer/sales', label: 'Sales', icon: ChartBarIcon },
-        { href: '/organizer/payouts', label: 'Payouts', icon: CurrencyRupeeIcon },
+        { href: '/organizer/payouts', label: 'Payouts', icon: BanknotesIcon },
         { href: '/organizer/checkin', label: 'Check-in', icon: ClockIcon },
         ...commonLinks,
       ];

@@ -20,7 +20,7 @@ import {
   ArrowRightIcon,
   PlusIcon,
   EyeIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   HomeIcon,
   CalendarDaysIcon,
   FunnelIcon,
@@ -29,7 +29,7 @@ import {
   Squares2X2Icon,
   ListBulletIcon,
   ShieldCheckIcon,
-  BanknotesIcon,
+
   InformationCircleIcon,
   PencilIcon, // ← Add this
   ChatBubbleLeftRightIcon, // ← Add this
@@ -1756,7 +1756,7 @@ function BookingsContent() {
                             {event.vendorCount} vendor(s)
                           </div>
                           <div className="flex items-center">
-                            <CurrencyRupeeIcon className="h-4 w-4 mr-1 text-indigo-500" />
+                            <BanknotesIcon className="h-4 w-4 mr-1 text-indigo-500" />
                             {event.guestCount} guests
                           </div>
                         </div>

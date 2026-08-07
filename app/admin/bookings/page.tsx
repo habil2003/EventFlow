@@ -12,13 +12,13 @@ import {
   ClockIcon,
   UserCircleIcon,
   CalendarIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   EyeIcon,
   ArrowPathIcon,
   DocumentTextIcon,
   BuildingOfficeIcon,
   ExclamationTriangleIcon,
-  BanknotesIcon,
+
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 
@@ -358,7 +358,7 @@ export default function BookingsPage() {
               </p>
             </div>
             <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <CurrencyRupeeIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <BanknotesIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">

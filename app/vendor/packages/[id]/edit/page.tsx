@@ -16,7 +16,7 @@ import {
   DocumentTextIcon,
   PhotoIcon,
   UserGroupIcon,
-  CurrencyRupeeIcon
+  BanknotesIcon
 } from "@heroicons/react/24/outline";
 import ImageUpload from "@/components/ImageUpload";
 

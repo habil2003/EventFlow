@@ -13,7 +13,7 @@ import {
   XCircleIcon,
   ClockIcon as PendingIcon,
   ArrowLeftIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CreditCardIcon,
   DocumentTextIcon,
   ClockIcon,

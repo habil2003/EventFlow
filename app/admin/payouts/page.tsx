@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CheckCircleIcon,
   ClockIcon,
   ArrowPathIcon,
@@ -310,7 +310,7 @@ export default function AdminPayoutsPage() {
                 <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(summary.totalPaid)}</p>
               </div>
               <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <CurrencyRupeeIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <BanknotesIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               </div>
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Platform commission: {formatCurrency(summary.totalCommission)}</p>
@@ -415,7 +415,7 @@ export default function AdminPayoutsPage() {
                   <tr>
                     <td colSpan={9} className="px-6 py-12 text-center">
                       <div className="text-center">
-                        <CurrencyRupeeIcon className="h-12 w-12 mx-auto text-gray-400 dark:text-gray-600 mb-3" />
+                        <BanknotesIcon className="h-12 w-12 mx-auto text-gray-400 dark:text-gray-600 mb-3" />
                         <p className="text-gray-500 dark:text-gray-400">No payouts found</p>
                         <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Try adjusting your filters</p>
                       </div>

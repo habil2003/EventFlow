@@ -9,7 +9,7 @@ import {
   CalendarIcon,
   TicketIcon,
   ChartBarIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   PlusCircleIcon,
   ArrowRightIcon,
   UserGroupIcon,
@@ -197,7 +197,7 @@ export default function OrganizerDashboard() {
 
         <div className="rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <CurrencyRupeeIcon className="h-5 w-5 text-amber-500 dark:text-amber-400" />
+            <BanknotesIcon className="h-5 w-5 text-amber-500 dark:text-amber-400" />
           </div>
           <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
             NPR {data.totalRevenue.toLocaleString()}

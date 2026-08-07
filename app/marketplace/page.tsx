@@ -12,7 +12,7 @@ import {
   FunnelIcon,
   BuildingOfficeIcon,
   SparklesIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
 } from "@heroicons/react/24/outline";
 
 interface Package {
@@ -433,7 +433,7 @@ function MarketplaceContent() {
                       {vendor.minPrice && (
                         <div className="mb-3">
                           <div className="flex items-center gap-1">
-                            <CurrencyRupeeIcon className="h-4 w-4 text-indigo-500" />
+                            <BanknotesIcon className="h-4 w-4 text-indigo-500" />
                             <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
                               From NPR {vendor.minPrice.toLocaleString()}
                             </span>

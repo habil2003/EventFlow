@@ -11,7 +11,7 @@ import {
   PencilIcon,
   TrashIcon,
   EyeIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CalendarIcon,
   MoonIcon,
   SunIcon,
@@ -372,7 +372,7 @@ export default function VendorPackagesPage() {
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                        <CurrencyRupeeIcon className="h-3 w-3" />
+                        <BanknotesIcon className="h-3 w-3" />
                         Fixed Price
                       </span>
                     )}

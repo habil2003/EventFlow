@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   ChartBarIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   UsersIcon,
   CalendarIcon,
   ArrowPathIcon,
@@ -262,7 +262,7 @@ export default function AnalyticsPage() {
               </p>
             </div>
             <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <CurrencyRupeeIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <BanknotesIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
           <div className={`flex items-center gap-1 mt-1 text-sm ${getGrowthColor(summary.revenueGrowth)}`}>

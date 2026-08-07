@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   HomeIcon,
   CalendarIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   UserCircleIcon,
   Bars3Icon,
   XCircleIcon,
@@ -74,7 +74,7 @@ export default function VendorLayout({
     { href: '/vendor', label: 'Dashboard', icon: HomeIcon },
     { href: '/vendor/bookings', label: 'Bookings', icon: CalendarIcon },
     { href: '/vendor/packages', label: 'Packages', icon: CubeIcon },  // ← Changed from PackageIcon
-    { href: '/vendor/payouts', label: 'Payouts', icon: CurrencyRupeeIcon },
+    { href: '/vendor/payouts', label: 'Payouts', icon: BanknotesIcon },
   ];
 
   if (!mounted || status === "loading") {

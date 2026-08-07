@@ -9,12 +9,12 @@ import {
   UsersIcon,
   BuildingOfficeIcon,
   BriefcaseIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
   DocumentTextIcon,
-  BanknotesIcon,
+
   CalendarIcon,
   ArrowTrendingUpIcon,
   ShieldCheckIcon,
@@ -368,7 +368,7 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <CurrencyRupeeIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  <BanknotesIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
               </div>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
@@ -525,7 +525,7 @@ export default function AdminDashboard() {
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center group-hover:scale-110 group-hover:bg-red-200 dark:group-hover:bg-red-800/50 transition-all duration-200">
-                  <CurrencyRupeeIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  <BanknotesIcon className="h-6 w-6 text-red-600 dark:text-red-400" />
                 </div>
               </div>
               <div className="relative mt-2 flex items-center justify-between">

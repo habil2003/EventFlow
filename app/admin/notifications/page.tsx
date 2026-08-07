@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import type { ElementType } from "react";
@@ -13,11 +13,11 @@ import {
   BuildingOfficeIcon,
   UserGroupIcon,
   ReceiptRefundIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   ScaleIcon,
   DocumentTextIcon,
   ArrowRightIcon,
-  BanknotesIcon,
+
 } from "@heroicons/react/24/outline";
 
 interface NotificationItem {
@@ -72,7 +72,7 @@ const TYPE_META: Record<string, { icon: ElementType; label: string; color: strin
     color: "text-indigo-600 bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-400",
   },
   PAYOUT: {
-    icon: CurrencyRupeeIcon,
+    icon: BanknotesIcon,
     label: "Failed Payout",
     color: "text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400",
   },

@@ -11,7 +11,7 @@ import {
   BuildingOfficeIcon, 
   ArrowRightIcon,
   ClockIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   UserIcon,
   PlusIcon,
   MagnifyingGlassIcon,
@@ -159,7 +159,7 @@ export default function UserDashboard() {
     {
       label: "My Refunds",
       value: stats.totalRefunds,
-      icon: CurrencyRupeeIcon,
+      icon: BanknotesIcon,
       color: "from-orange-500 to-orange-600",
       href: "/my-refunds",
     },
@@ -191,7 +191,7 @@ export default function UserDashboard() {
       case 'booking':
         return BuildingOfficeIcon;
       case 'refund':
-        return CurrencyRupeeIcon;
+        return BanknotesIcon;
       default:
         return CalendarIcon;
     }
@@ -314,7 +314,7 @@ export default function UserDashboard() {
                             day: 'numeric',
                             year: 'numeric',
                           })}
-                          {activity.amount && ` • ₹${activity.amount.toLocaleString()}`}
+                          {activity.amount && ` • NPR ${activity.amount.toLocaleString()}`}
                         </p>
                       </div>
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(activity.status)}`}>

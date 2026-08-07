@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CheckCircleIcon,
   ClockIcon,
   MoonIcon,
@@ -171,7 +171,7 @@ export default function OrganizerPayoutsPage() {
                 <p className="text-2xl font-bold text-indigo-600">NPR {summary.totalReleased.toLocaleString()}</p>
               </div>
               <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <CurrencyRupeeIcon className="h-5 w-5 text-indigo-600" />
+                <BanknotesIcon className="h-5 w-5 text-indigo-600" />
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">{summary.totalPayouts} payouts completed</p>
@@ -284,7 +284,7 @@ export default function OrganizerPayoutsPage() {
           
           {payouts.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-12 text-center">
-              <CurrencyRupeeIcon className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+              <BanknotesIcon className="h-12 w-12 mx-auto text-gray-400 mb-3" />
               <p className="text-gray-500">No payouts yet</p>
               <p className="text-sm text-gray-400 mt-1">Payments will appear here after admin releases funds</p>
             </div>

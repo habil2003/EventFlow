@@ -9,7 +9,7 @@ import {
   CalendarIcon,
   MapPinIcon,
   UserGroupIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
@@ -19,7 +19,7 @@ import {
   BuildingOfficeIcon,
   CreditCardIcon,
   ChatBubbleLeftRightIcon,
-  BanknotesIcon,
+
   ShieldCheckIcon,
   InformationCircleIcon,
   MagnifyingGlassIcon,
@@ -448,7 +448,7 @@ export default function VendorBookingsPage() {
                               {booking.guestCount} guests
                             </div>
                             <div className="flex items-center">
-                              <CurrencyRupeeIcon className="h-4 w-4 mr-1 text-indigo-500" />
+                              <BanknotesIcon className="h-4 w-4 mr-1 text-indigo-500" />
                               NPR {booking.totalAmount.toLocaleString()}
                             </div>
                           </div>

@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import { 
   ArrowLeftIcon,
   TicketIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   UserGroupIcon,
   ChartBarIcon,
   CalendarIcon,
@@ -395,7 +395,7 @@ function SalesContent() {
                         </p>
                       </div>
                       <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                        <CurrencyRupeeIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <BanknotesIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
                       </div>
                     </div>
                   </motion.div>

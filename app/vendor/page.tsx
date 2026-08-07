@@ -8,7 +8,7 @@ import {
   CubeIcon,
   PlusIcon,
   CalendarIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   UserGroupIcon,
   CheckCircleIcon,
   BuildingOfficeIcon,
@@ -242,7 +242,7 @@ export default function VendorDashboard() {
     {
       label: "Payouts",
       href: "/vendor/payouts",
-      icon: CurrencyRupeeIcon,
+      icon: BanknotesIcon,
       color: "bg-purple-600 hover:bg-purple-700",
       description: "View payment history",
     },
@@ -313,7 +313,7 @@ export default function VendorDashboard() {
 
         <div className="rounded-xl bg-white dark:bg-gray-800 p-4 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md hover:border-emerald-200 dark:hover:border-emerald-800 transition-all duration-200 cursor-default">
           <div className="flex items-center justify-between">
-            <CurrencyRupeeIcon className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
+            <BanknotesIcon className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
           </div>
           <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
             NPR {data.totalRevenue.toLocaleString()}

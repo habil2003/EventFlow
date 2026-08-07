@@ -1,12 +1,12 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   ScaleIcon,
-  CurrencyRupeeIcon,
   BanknotesIcon,
+
   DocumentTextIcon,
   ArrowPathIcon,
   WalletIcon,
@@ -231,7 +231,7 @@ export default function CommissionsPage() {
 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
               <div className="flex items-center gap-2 mb-4">
-                <CurrencyRupeeIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <BanknotesIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Remaining Payouts
                 </h3>

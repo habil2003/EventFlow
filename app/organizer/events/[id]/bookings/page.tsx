@@ -13,7 +13,7 @@ import {
   MapPinIcon,
   TicketIcon,
   UserIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CheckCircleIcon,
   XCircleIcon,
   QrCodeIcon,

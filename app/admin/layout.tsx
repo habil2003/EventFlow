@@ -18,7 +18,7 @@ import {
   SunIcon,
   MoonIcon,
   XCircleIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   UserCircleIcon,
   DocumentTextIcon,
   BuildingOfficeIcon,
@@ -123,7 +123,7 @@ export default function AdminLayout({
       category: 'Financial',
       items: [
         { href: '/admin/escrow', label: 'Escrow', icon: ShieldCheckIcon },
-        { href: '/admin/payouts', label: 'Payouts', icon: CurrencyRupeeIcon },
+        { href: '/admin/payouts', label: 'Payouts', icon: BanknotesIcon },
         { href: '/admin/refunds', label: 'Refunds', icon: ReceiptRefundIcon },
         { href: '/admin/transactions', label: 'Transactions', icon: CreditCardIcon },
         { href: '/admin/commissions', label: 'Commissions', icon: ScaleIcon },

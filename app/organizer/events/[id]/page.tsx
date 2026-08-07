@@ -11,7 +11,7 @@ import {
   MapPinIcon,
   TicketIcon,
   UserGroupIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   ChartBarIcon,
   QrCodeIcon,
   PencilIcon,
@@ -229,7 +229,7 @@ export default function OrganizerEventDetailPage({ params }: { params: Promise<{
                 <p className="text-sm text-gray-500">Total Revenue</p>
                 <p className="text-2xl font-bold text-green-600">NPR {event.totalRevenue.toLocaleString()}</p>
               </div>
-              <CurrencyRupeeIcon className="h-8 w-8 text-green-500 opacity-50" />
+              <BanknotesIcon className="h-8 w-8 text-green-500 opacity-50" />
             </div>
           </div>
 

@@ -9,7 +9,7 @@ import {
   TicketIcon,
   QrCodeIcon,
   ChartBarIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   HomeIcon,
   Bars3Icon,
   XCircleIcon,
@@ -78,7 +78,7 @@ export default function OrganizerLayout({
     { href: '/organizer/create', label: 'Create Event', icon: TicketIcon },
     { href: '/organizer/checkin', label: 'Check-in', icon: QrCodeIcon },
     { href: '/organizer/sales', label: 'Sales', icon: ChartBarIcon },
-    { href: '/organizer/payouts', label: 'Payouts', icon: CurrencyRupeeIcon },
+    { href: '/organizer/payouts', label: 'Payouts', icon: BanknotesIcon },
   ];
 
   if (!mounted || status === "loading") {

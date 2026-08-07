@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
-  BanknotesIcon,
+
   BuildingOfficeIcon,
   ArrowPathIcon,
   InformationCircleIcon,
@@ -526,7 +526,7 @@ export default function AdminEscrowPage() {
           text: "Ready to Release Remaining",
           color:
             "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
-          icon: CurrencyRupeeIcon,
+          icon: BanknotesIcon,
         };
       }
 
@@ -790,7 +790,7 @@ export default function AdminEscrowPage() {
                 </p>
               </div>
               <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <CurrencyRupeeIcon className="h-6 w-6 text-blue-600 dark:text-blue-500" />
+                <BanknotesIcon className="h-6 w-6 text-blue-600 dark:text-blue-500" />
               </div>
             </div>
           </div>
@@ -1145,7 +1145,7 @@ export default function AdminEscrowPage() {
                               disabled={releasingId === booking.id}
                               className="px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                             >
-                              <CurrencyRupeeIcon className="h-4 w-4 inline mr-1" />
+                              <BanknotesIcon className="h-4 w-4 inline mr-1" />
                               Release Remaining
                             </button>
                           )}

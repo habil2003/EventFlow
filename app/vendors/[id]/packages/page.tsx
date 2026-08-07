@@ -10,7 +10,7 @@ import {
   MapPinIcon,
   StarIcon,
   BuildingOfficeIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   UserGroupIcon,
   PhotoIcon,
   EyeIcon,
@@ -332,7 +332,7 @@ function VendorPackagesContent() {
                       </>
                     ) : (
                       <>
-                        <CurrencyRupeeIcon className="h-3 w-3" />
+                        <BanknotesIcon className="h-3 w-3" />
                         Fixed
                       </>
                     )}

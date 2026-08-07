@@ -15,7 +15,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ClipboardDocumentIcon,
-  CurrencyRupeeIcon,
+
   IdentificationIcon,
   CreditCardIcon,
   SparklesIcon,
@@ -379,7 +379,7 @@ export default function TicketDetailPage() {
               
               <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center">
-                  <CurrencyRupeeIcon className="h-4 w-4 text-gray-400 mr-2" />
+                  <BanknotesIcon className="h-4 w-4 text-gray-400 mr-2" />
                   <span className="text-gray-500 dark:text-gray-400 text-sm">Total Amount</span>
                 </div>
                 <span className="font-semibold text-indigo-600 dark:text-indigo-400 text-sm">

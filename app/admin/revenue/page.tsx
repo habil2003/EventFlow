@@ -1,14 +1,14 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   DocumentTextIcon,
-  CurrencyRupeeIcon,
+  BanknotesIcon,
   ArrowPathIcon,
   ScaleIcon,
-  BanknotesIcon,
+
   CreditCardIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
@@ -194,7 +194,7 @@ export default function RevenuePage() {
               </p>
             </div>
             <div className="h-10 w-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-              <CurrencyRupeeIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <BanknotesIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
             </div>
           </div>
           <div
